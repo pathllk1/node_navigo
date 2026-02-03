@@ -1,0 +1,30 @@
+{
+  "name": "my-spa-app",
+  "version": "1.0.0",
+  "description": "SPA with Navigo and Node.js server with modular routes",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js",
+    "build:css": "npx @tailwindcss/cli -i ./src/input.css -o ./public/output.css --minify",
+    "watch:css": "npx @tailwindcss/cli -i ./src/input.css -o ./public/output.css --watch"
+  },
+  "keywords": [
+    "SPA",
+    "Navigo",
+    "Node.js",
+    "Express"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@tailwindcss/cli": "^4.1.18",
+    "express": "^4.18.2",
+    "navigo": "^8.11.1",
+    "tailwindcss": "^4.1.18"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
