@@ -1,6 +1,13 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
+import bcrypt from "bcrypt";
+
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = "your_super_secret_key"; // store in env variable in production
+const JWT_EXPIRES_IN = "1h"; // token expiration
+
 
 const router = express.Router();
 const usersFile = path.join(process.cwd(), "data", "users.json");
@@ -22,7 +29,7 @@ router.get("/users", (req, res) => {
 });
 
 // ---------------- Register ----------------
-router.post("/auth/register", (req, res) => {
+router.post("/auth/register", async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password)
     return res.status(400).json({ error: "All fields required" });
@@ -31,11 +38,14 @@ router.post("/auth/register", (req, res) => {
   if (users.find(u => u.email === email))
     return res.status(400).json({ error: "Email already exists" });
 
+  // Hash password
+  const hashedPassword = await bcrypt.hash(password, 10);
+
   const newUser = {
     id: Date.now(),
     name,
     email,
-    password,
+    password: hashedPassword,
     registeredAt: new Date().toISOString(),
     logins: []
   };
@@ -47,22 +57,36 @@ router.post("/auth/register", (req, res) => {
 });
 
 // ---------------- Login ----------------
-router.post("/auth/login", (req, res) => {
+router.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
     return res.status(400).json({ error: "All fields required" });
 
   const users = readUsers();
-  const user = users.find(u => u.email === email && u.password === password);
-
+  const user = users.find(u => u.email === email);
   if (!user) return res.status(401).json({ error: "Invalid credentials" });
+
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) return res.status(401).json({ error: "Invalid credentials" });
 
   // Add login timestamp
   const loginTime = new Date().toISOString();
   user.logins.push(loginTime);
   writeUsers(users);
 
-  res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, logins: user.logins } });
+  // Generate JWT
+  const token = jwt.sign(
+    { id: user.id, name: user.name, email: user.email },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+
+  res.json({
+    success: true,
+    token, // send JWT to client
+    user: { id: user.id, name: user.name, email: user.email, logins: user.logins }
+  });
 });
+
 
 export default router;

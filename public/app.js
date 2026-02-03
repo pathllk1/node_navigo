@@ -19,7 +19,6 @@ if (savedUser) currentUser = JSON.parse(savedUser);
 // ---------------- Auth Success ----------------
 function handleAuthSuccess(user) {
   currentUser = user;
-  localStorage.setItem("currentUser", JSON.stringify(user));
   router.navigate("/");
 }
 
@@ -28,6 +27,7 @@ function handleLogout() {
   currentUser = null;
   localStorage.removeItem("currentUser");
   router.navigate("/auth");
+  renderPage(AuthPage(handleAuthSuccess)); // force re-render
 }
 
 // ---------------- Sidebar Init ----------------
@@ -37,15 +37,34 @@ function initSidebar() {
   const mainContent = document.getElementById("main-content");
   const sidebarItems = sidebar.querySelectorAll(".sidebar-text");
 
+  const logoutBtn = document.getElementById("logout-btn");
+
+  if (logoutBtn) {
+    if (currentUser) {
+      logoutBtn.style.display = "block";
+      logoutBtn.onclick = handleLogout;
+    } else {
+      logoutBtn.style.display = "none"; // hide when no user
+    }
+  }
+
   function updateSidebar(collapsed) {
     if (collapsed) {
       sidebar.style.width = "60px";
       mainContent.style.marginLeft = "60px";
       sidebarItems.forEach(item => item.style.display = "none");
+
+      // hide last login
+      const lastLoginEl = sidebar.querySelector(".sidebar-last-login");
+      if (lastLoginEl) lastLoginEl.style.display = "none";
     } else {
       sidebar.style.width = "180px";
       mainContent.style.marginLeft = "180px";
       sidebarItems.forEach(item => item.style.display = "inline");
+
+      // show last login
+      const lastLoginEl = sidebar.querySelector(".sidebar-last-login");
+      if (lastLoginEl) lastLoginEl.style.display = "block";
     }
     toggle.style.transform = collapsed
       ? "translateY(-50%) rotate(0deg)"
@@ -67,7 +86,8 @@ function initSidebar() {
       if (sidebar.dataset.collapsed === "true") {
         const tooltip = document.createElement("div");
         tooltip.innerText = item.dataset.tooltip;
-        tooltip.className = "absolute left-full top-1/2 transform -translate-y-1/2 ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg z-50";
+        tooltip.className =
+          "absolute left-full top-1/2 transform -translate-y-1/2 ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg z-50";
         tooltip.id = "sidebar-tooltip";
         item.appendChild(tooltip);
       }
@@ -82,9 +102,12 @@ function initSidebar() {
   if (currentUser) {
     const authItem = sidebar.querySelector('a[href="/auth"]');
     if (authItem) {
-      // Update user name
       authItem.querySelector(".sidebar-text").textContent = currentUser.name;
       authItem.dataset.tooltip = currentUser.name;
+
+      // Remove existing last login if any
+      let existingLogin = authItem.querySelector(".sidebar-last-login");
+      if (existingLogin) existingLogin.remove();
 
       // Create last login subtext
       let lastLoginContainer = document.createElement("div");
@@ -98,25 +121,12 @@ function initSidebar() {
       lastLoginContainer.textContent = `Last login: ${lastLogin}`;
       authItem.appendChild(lastLoginContainer);
 
-      // Function to toggle last login visibility
-      function toggleLastLoginDisplay(collapsed) {
-        lastLoginContainer.style.display = collapsed ? "none" : "block";
-      }
-
-      // Initial state
-      toggleLastLoginDisplay(sidebar.dataset.collapsed === "true");
-
-      // Sidebar toggle listener
-      toggle.onclick = () => {
-        const collapsed = sidebar.dataset.collapsed === "true";
-        sidebar.dataset.collapsed = String(!collapsed);
-        updateSidebar(!collapsed);
-        toggleLastLoginDisplay(!collapsed); // show only when expanded
-      };
+      // Set initial visibility based on collapse
+      lastLoginContainer.style.display =
+        sidebar.dataset.collapsed === "true" ? "none" : "block";
     }
   }
 }
-
 
 // ---------------- Render Pages ----------------
 function renderPage(page) {
@@ -134,6 +144,10 @@ router
   .on("/services", () => renderPage(ServicesPage()))
   .on("/server-info", () => renderPage(ServerInfoPage()))
   .on("/auth", () => renderPage(AuthPage(handleAuthSuccess)))
-  .on("/not-found", () => renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => { } }))
-  .notFound(() => renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => { } }))
+  .on("/not-found", () =>
+    renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => {} })
+  )
+  .notFound(() =>
+    renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => {} })
+  )
   .resolve();

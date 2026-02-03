@@ -1,59 +1,91 @@
 export function AuthPage(onAuthSuccess) {
-  const html = `
-    <div class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-      <div class="w-full max-w-2xl p-6 bg-white rounded-xl shadow-lg">
-        <!-- Tabs -->
-        <div class="flex justify-center mb-6 border-b-2 border-gray-200">
-          <button id="tab-login" class="tab-btn px-4 py-2 text-purple-700 border-b-2 border-purple-700 font-semibold focus:outline-none">Login</button>
-          <button id="tab-register" class="tab-btn px-4 py-2 text-gray-500 hover:text-purple-700 font-semibold focus:outline-none">Register</button>
-        </div>
+  // Check if a user is logged in
+  const user = JSON.parse(localStorage.getItem("currentUser"));
 
-        <!-- Login Form -->
-        <div id="login-form" class="tab-content">
-          <div class="flex flex-col space-y-4">
-            <div class="flex items-center border rounded px-3 py-2 shadow-sm">
-              <span class="material-icons text-gray-400 mr-2">email</span>
-              <input type="email" id="login-email" placeholder="Email" class="w-full outline-none">
-            </div>
-            <div class="flex items-center border rounded px-3 py-2 shadow-sm">
-              <span class="material-icons text-gray-400 mr-2">lock</span>
-              <input type="password" id="login-password" placeholder="Password" class="w-full outline-none">
-            </div>
-            <button id="login-btn" class="bg-purple-600 text-white py-2 rounded shadow hover:bg-purple-700 transition">Login</button>
-          </div>
-          <p id="login-msg" class="mt-2 text-sm text-red-500"></p>
-        </div>
+  let html = "";
 
-        <!-- Register Form -->
-        <div id="register-form" class="tab-content hidden">
-          <div class="flex flex-col space-y-4">
-            <div class="flex items-center border rounded px-3 py-2 shadow-sm">
-              <span class="material-icons text-gray-400 mr-2">person</span>
-              <input type="text" id="register-name" placeholder="Full Name" class="w-full outline-none">
-            </div>
-            <div class="flex items-center border rounded px-3 py-2 shadow-sm">
-              <span class="material-icons text-gray-400 mr-2">email</span>
-              <input type="email" id="register-email" placeholder="Email" class="w-full outline-none">
-            </div>
-            <div class="flex items-center border rounded px-3 py-2 shadow-sm">
-              <span class="material-icons text-gray-400 mr-2">lock</span>
-              <input type="password" id="register-password" placeholder="Password" class="w-full outline-none">
-            </div>
-            <button id="register-btn" class="bg-purple-600 text-white py-2 rounded shadow hover:bg-purple-700 transition">Register</button>
-          </div>
-          <p id="register-msg" class="mt-2 text-sm text-red-500"></p>
+  if (user) {
+    // User is logged in → show welcome message
+    html = `
+      <div class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <div class="w-full max-w-2xl p-6 bg-white rounded-xl shadow-lg text-center">
+          <h2 class="text-2xl font-semibold text-purple-700 mb-4">Welcome, ${user.name}!</h2>
+          <p class="text-gray-600 mb-4">You are already logged in.</p>
+          <button id="auth-logout-btn" class="bg-red-500 text-white px-4 py-2 rounded shadow hover:bg-red-600 transition">
+            Logout
+          </button>
         </div>
       </div>
-    </div>
-  `;
+    `;
+  } else {
+    // No user → show login/register forms
+    html = `
+      <div class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <div class="w-full max-w-2xl p-6 bg-white rounded-xl shadow-lg">
+          <!-- Tabs -->
+          <div class="flex justify-center mb-6 border-b-2 border-gray-200">
+            <button id="tab-login" class="tab-btn px-4 py-2 text-purple-700 border-b-2 border-purple-700 font-semibold focus:outline-none">Login</button>
+            <button id="tab-register" class="tab-btn px-4 py-2 text-gray-500 hover:text-purple-700 font-semibold focus:outline-none">Register</button>
+          </div>
+
+          <!-- Login Form -->
+          <div id="login-form" class="tab-content">
+            <div class="flex flex-col space-y-4">
+              <div class="flex items-center border rounded px-3 py-2 shadow-sm">
+                <span class="material-icons text-gray-400 mr-2">email</span>
+                <input type="email" id="login-email" placeholder="Email" class="w-full outline-none">
+              </div>
+              <div class="flex items-center border rounded px-3 py-2 shadow-sm">
+                <span class="material-icons text-gray-400 mr-2">lock</span>
+                <input type="password" id="login-password" placeholder="Password" class="w-full outline-none">
+              </div>
+              <button id="login-btn" class="bg-purple-600 text-white py-2 rounded shadow hover:bg-purple-700 transition">Login</button>
+            </div>
+            <p id="login-msg" class="mt-2 text-sm text-red-500"></p>
+          </div>
+
+          <!-- Register Form -->
+          <div id="register-form" class="tab-content hidden">
+            <div class="flex flex-col space-y-4">
+              <div class="flex items-center border rounded px-3 py-2 shadow-sm">
+                <span class="material-icons text-gray-400 mr-2">person</span>
+                <input type="text" id="register-name" placeholder="Full Name" class="w-full outline-none">
+              </div>
+              <div class="flex items-center border rounded px-3 py-2 shadow-sm">
+                <span class="material-icons text-gray-400 mr-2">email</span>
+                <input type="email" id="register-email" placeholder="Email" class="w-full outline-none">
+              </div>
+              <div class="flex items-center border rounded px-3 py-2 shadow-sm">
+                <span class="material-icons text-gray-400 mr-2">lock</span>
+                <input type="password" id="register-password" placeholder="Password" class="w-full outline-none">
+              </div>
+              <button id="register-btn" class="bg-purple-600 text-white py-2 rounded shadow hover:bg-purple-700 transition">Register</button>
+            </div>
+            <p id="register-msg" class="mt-2 text-sm text-red-500"></p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   function scripts() {
+    if (user) {
+      // If user is logged in → attach logout button
+      const logoutBtn = document.getElementById("auth-logout-btn");
+      if (logoutBtn) logoutBtn.onclick = () => {
+        localStorage.removeItem("currentUser");
+        localStorage.removeItem("token"); // remove JWT
+        window.location.reload(); // refresh to show login forms
+      };
+      return;
+    }
+
+    // Tabs
     const loginTab = document.getElementById("tab-login");
     const registerTab = document.getElementById("tab-register");
     const loginForm = document.getElementById("login-form");
     const registerForm = document.getElementById("register-form");
 
-    // Tabs
     loginTab.onclick = () => {
       loginForm.classList.remove("hidden");
       registerForm.classList.add("hidden");
@@ -85,8 +117,13 @@ export function AuthPage(onAuthSuccess) {
           body: JSON.stringify({ email, password })
         });
         const data = await res.json();
-        if (data.success) onAuthSuccess(data.user);
-        else msg.textContent = data.error;
+        if (data.success) {
+          localStorage.setItem("token", data.token); // save JWT
+          localStorage.setItem("currentUser", JSON.stringify(data.user));
+          onAuthSuccess(data.user);
+        } else {
+          msg.textContent = data.error;
+        }
       } catch (err) {
         msg.textContent = "Server error";
       }
@@ -108,8 +145,11 @@ export function AuthPage(onAuthSuccess) {
         });
         const data = await res.json();
         if (data.success) {
+          localStorage.setItem("token", data.token); // save JWT
+          localStorage.setItem("currentUser", JSON.stringify(data.user));
           msg.textContent = `Registered ${data.user.name}`;
           msg.className = "mt-2 text-sm text-green-600";
+          onAuthSuccess(data.user);
         } else {
           msg.textContent = data.error;
           msg.className = "mt-2 text-sm text-red-500";

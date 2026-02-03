@@ -3,13 +3,12 @@ export function Layout(innerHtml) {
     <!-- Top navbar -->
     <nav class="fixed top-0 left-0 w-full h-16 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-md flex items-center px-6 z-20">
       <a href="/" data-navigo class="font-bold text-lg">Home</a>
-      <div class="ml-6 space-x-4">
-        
-      </div>
     </nav>
 
     <!-- Sidebar (fixed) -->
-    <div id="sidebar" class="fixed top-16 left-0 bottom-0 bg-gradient-to-b from-purple-700 via-purple-600 to-indigo-700 text-white z-10" data-collapsed="true" style="width:60px; transition: width 0.3s;">
+    <div id="sidebar" class="fixed top-16 left-0 bottom-0 bg-gradient-to-b from-purple-700 via-purple-600 to-indigo-700 text-white z-10 flex flex-col justify-between" data-collapsed="true" style="width:60px; transition: width 0.3s;">
+
+      <!-- Sidebar menu items -->
       <ul class="flex flex-col mt-4 space-y-2 relative">
         <li>
           <a href="/" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-purple-500 rounded" data-tooltip="Home">
@@ -44,12 +43,13 @@ export function Layout(innerHtml) {
         <li>
           <a href="/auth" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-purple-500 rounded" data-tooltip="Login/Signup">
             <span class="material-icons">person</span>
-    <span class="ml-3 sidebar-text">Login/Signup</span>
+            <span class="ml-3 sidebar-text">Login/Signup</span>
           </a>
         </li>
       </ul>
 
-      <!-- Toggle button -->
+
+      <!-- Sidebar toggle button -->
       <button id="sidebar-toggle"
               class="absolute top-1/2 right-[-12px] transform -translate-y-1/2 w-6 h-6 bg-white text-black rounded-full flex items-center justify-center shadow-md cursor-pointer z-20">
         &gt;
@@ -63,13 +63,12 @@ export function Layout(innerHtml) {
       </main>
     </div>
 
-
-     <!-- Bottom footer -->
+    <!-- Bottom footer -->
     <footer class="fixed bottom-0 left-0 w-full h-12 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white text-center flex items-center justify-center text-sm z-10">
       &copy; 2026 My SPA. All rights reserved.
     </footer>
 
     <!-- Google Material Icons -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    `;
+  `;
 }
