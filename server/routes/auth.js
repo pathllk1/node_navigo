@@ -2,6 +2,7 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import bcrypt from "bcrypt";
+import { authenticateJWT } from "../middleware/auth.js";
 
 import jwt from "jsonwebtoken";
 
@@ -23,7 +24,7 @@ function writeUsers(users) {
 }
 
 // ---------------- Fetch all users ----------------
-router.get("/users", (req, res) => {
+router.get("/users", authenticateJWT, (req, res) => {
   const users = readUsers();
   res.json(users);
 });

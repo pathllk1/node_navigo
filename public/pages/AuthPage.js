@@ -1,13 +1,14 @@
 export function AuthPage(onAuthSuccess) {
   // Check if a user is logged in
   const user = JSON.parse(localStorage.getItem("currentUser"));
+  const token = localStorage.getItem("token");
 
   let html = "";
 
   if (user) {
-    // User is logged in → show welcome message
+    // User is logged in → show welcome message + all users
     html = `
-      <div class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+      <div class="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] space-y-6">
         <div class="w-full max-w-2xl p-6 bg-white rounded-xl shadow-lg text-center">
           <h2 class="text-2xl font-semibold text-purple-700 mb-4">Welcome, ${user.name}!</h2>
           <p class="text-gray-600 mb-4">You are already logged in.</p>
@@ -15,10 +16,14 @@ export function AuthPage(onAuthSuccess) {
             Logout
           </button>
         </div>
+        <div id="all-users" class="w-full max-w-2xl p-6 bg-white rounded-xl shadow-lg text-left">
+          <h3 class="text-lg font-semibold text-purple-700 mb-2">All Users:</h3>
+          <ul id="users-list" class="list-disc list-inside text-gray-700"></ul>
+        </div>
       </div>
     `;
   } else {
-    // No user → show login/register forms
+    // No user → show login/register forms (unchanged)
     html = `
       <div class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <div class="w-full max-w-2xl p-6 bg-white rounded-xl shadow-lg">
@@ -70,17 +75,36 @@ export function AuthPage(onAuthSuccess) {
 
   function scripts() {
     if (user) {
-      // If user is logged in → attach logout button
+      // Logout button
       const logoutBtn = document.getElementById("auth-logout-btn");
       if (logoutBtn) logoutBtn.onclick = () => {
         localStorage.removeItem("currentUser");
         localStorage.removeItem("token"); // remove JWT
-        window.location.reload(); // refresh to show login forms
+        window.location.reload();
       };
+
+      // Fetch all users with JWT
+      async function fetchUsers() {
+        try {
+          const res = await fetch("/auth/users");
+          if (!res.ok) throw new Error("Failed to fetch users");
+          const users = await res.json();
+          const usersList = document.getElementById("users-list");
+          usersList.innerHTML = users
+            .map(u => `<li>${u.name} (${u.email})</li>`)
+            .join("");
+        } catch (err) {
+          console.error(err);
+          const usersList = document.getElementById("users-list");
+          usersList.innerHTML = "<li class='text-red-500'>Could not load users</li>";
+        }
+      }
+
+      fetchUsers();
       return;
     }
 
-    // Tabs
+    // Tabs + Login/Register logic (unchanged)
     const loginTab = document.getElementById("tab-login");
     const registerTab = document.getElementById("tab-register");
     const loginForm = document.getElementById("login-form");
@@ -145,7 +169,7 @@ export function AuthPage(onAuthSuccess) {
         });
         const data = await res.json();
         if (data.success) {
-          localStorage.setItem("token", data.token); // save JWT
+          localStorage.setItem("token", data.token);
           localStorage.setItem("currentUser", JSON.stringify(data.user));
           msg.textContent = `Registered ${data.user.name}`;
           msg.className = "mt-2 text-sm text-green-600";

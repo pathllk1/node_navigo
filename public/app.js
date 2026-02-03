@@ -6,6 +6,7 @@ import { ServicesPage } from "./pages/services.js";
 import { AuthPage } from "./pages/AuthPage.js";
 import { ServerInfoPage } from "./pages/server-info.js";
 import { Layout } from "./layout.js";
+import "./api.js";
 
 const root = document.getElementById("app");
 const router = new Navigo("/", { hash: false });
@@ -145,9 +146,6 @@ router
   .on("/server-info", () => renderPage(ServerInfoPage()))
   .on("/auth", () => renderPage(AuthPage(handleAuthSuccess)))
   .on("/not-found", () =>
-    renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => {} })
-  )
-  .notFound(() =>
     renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => {} })
   )
   .resolve();
