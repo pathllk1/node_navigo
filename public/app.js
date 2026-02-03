@@ -1,10 +1,11 @@
-import Navigo from 'https://cdn.jsdelivr.net/npm/navigo@8.11.1/+esm';
+
 import { HomePage } from "./pages/home.js";
 import { AboutPage } from "./pages/about.js";
 import { ContactPage } from "./pages/contact.js";
 import { ServicesPage } from "./pages/services.js";
 import { AuthPage } from "./pages/AuthPage.js";
 import { ServerInfoPage } from "./pages/server-info.js";
+import { TstPage } from "./pages/tst.js";
 import { Layout } from "./layout.js";
 import "./api.js";
 
@@ -145,6 +146,7 @@ router
   .on("/services", () => renderPage(ServicesPage()))
   .on("/server-info", () => renderPage(ServerInfoPage()))
   .on("/auth", () => renderPage(AuthPage(handleAuthSuccess)))
+  .on("/tst", () => renderPage(TstPage()))
   .on("/not-found", () =>
     renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => {} })
   )

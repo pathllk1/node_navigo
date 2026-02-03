@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 
 import apiRoutes from "./routes/api.js";
 import authRoutes from "./routes/auth.js";
-
+import tstRoutes from "./routes/tst.js";
 
 
 // Needed because __dirname doesn't exist in ES modules
@@ -23,6 +23,7 @@ app.use(express.static(path.join(__dirname, "../public")));
 // Use modular routes
 app.use("/api", apiRoutes);
 app.use("/auth", authRoutes);
+app.use("/tst", tstRoutes);
 
 // SPA fallback for all other routes
 app.get(/.*/, (req, res) => {
