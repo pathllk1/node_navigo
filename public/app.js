@@ -8,6 +8,7 @@ import { ServerInfoPage } from "./pages/server-info.js";
 import { TstPage } from "./pages/tst.js";
 import { Layout } from "./layout.js";
 import "./api.js";
+import { startAccessTokenTimer } from "./api.js";
 
 const root = document.getElementById("app");
 const router = new Navigo("/", { hash: false });
@@ -135,6 +136,7 @@ function renderPage(page) {
   root.innerHTML = Layout(page.html);
   router.updatePageLinks();
   initSidebar();
+  startAccessTokenTimer();
   if (page.scripts) page.scripts();
 }
 
@@ -148,6 +150,6 @@ router
   .on("/auth", () => renderPage(AuthPage(handleAuthSuccess)))
   .on("/tst", () => renderPage(TstPage()))
   .on("/not-found", () =>
-    renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => {} })
+    renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => { } })
   )
   .resolve();

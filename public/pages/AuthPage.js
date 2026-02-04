@@ -1,7 +1,9 @@
+import { clearAccessTokenTimer } from "../api.js";
 export function AuthPage(onAuthSuccess) {
   // Check if a user is logged in
   const user = JSON.parse(localStorage.getItem("currentUser"));
-  const token = localStorage.getItem("accessToken");
+  const accessToken = localStorage.getItem("accessToken");
+  
 
   let html = "";
 
@@ -82,6 +84,7 @@ export function AuthPage(onAuthSuccess) {
         localStorage.removeItem("accessToken"); // remove JWT
         localStorage.removeItem("refreshToken");
         window.location.reload();
+        clearAccessTokenTimer();
       };
 
       // Fetch all users with JWT

@@ -3,6 +3,7 @@ export function Layout(innerHtml) {
     <!-- Top navbar -->
     <nav class="fixed top-0 left-0 w-full h-16 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-md flex items-center px-6 z-20">
       <a href="/" data-navigo class="font-bold text-lg">Home</a>
+      <div id="token-timer" class="ml-auto text-sm font-mono opacity-90"></div>
     </nav>
 
     <!-- Sidebar (fixed) -->

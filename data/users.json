@@ -6,10 +6,14 @@
     "password": "$2b$10$lOkkxU3r9shmHjnz2Rzvfu9eVbx2lmrEEtUGD.zuuO9wvoe/EerKG",
     "registeredAt": "2026-02-04T07:43:26.470Z",
     "logins": [
-      "2026-02-04T07:43:53.829Z"
+      "2026-02-04T07:43:53.829Z",
+      "2026-02-04T07:58:51.618Z",
+      "2026-02-04T08:08:41.670Z"
     ],
     "refreshTokens": [
-      "$2b$10$cMqV3Vt2M34PB3q/9LvzRukKkgKxi8oOW6fKj8I6c0vEALC/iicTe"
+      "$2b$10$cMqV3Vt2M34PB3q/9LvzRukKkgKxi8oOW6fKj8I6c0vEALC/iicTe",
+      "$2b$10$MMlmjJ0/FABEYXUakp9dDeOXscnjdCRNS2KtqLh4TmN4HZNdPmXtq",
+      "$2b$10$gwQX4PtxxYmN.JR5mzYYHOlZMwg74Tpjb2GSRX689AiM2qy8/aTxu"
     ]
   }
 ]
