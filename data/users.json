@@ -1,21 +1,15 @@
 [
   {
-    "id": 1770122066125,
+    "id": 1770191006470,
     "name": "ANJAN PAUL",
     "email": "anjan.paul3@gmail.com",
-    "password": "$2b$10$QGGQqMVqawbnhGhlBWBD1e73ryMNbYi7PnOENGursyAZghninr.xK",
-    "registeredAt": "2026-02-03T12:34:26.125Z",
+    "password": "$2b$10$lOkkxU3r9shmHjnz2Rzvfu9eVbx2lmrEEtUGD.zuuO9wvoe/EerKG",
+    "registeredAt": "2026-02-04T07:43:26.470Z",
     "logins": [
-      "2026-02-03T12:34:35.984Z",
-      "2026-02-03T12:44:18.435Z",
-      "2026-02-03T12:47:21.578Z",
-      "2026-02-03T12:50:56.916Z",
-      "2026-02-03T12:51:21.419Z",
-      "2026-02-03T13:07:14.248Z",
-      "2026-02-03T13:12:08.906Z",
-      "2026-02-03T13:54:25.530Z",
-      "2026-02-03T15:22:10.949Z",
-      "2026-02-03T16:28:16.551Z"
+      "2026-02-04T07:43:53.829Z"
+    ],
+    "refreshTokens": [
+      "$2b$10$cMqV3Vt2M34PB3q/9LvzRukKkgKxi8oOW6fKj8I6c0vEALC/iicTe"
     ]
   }
 ]

@@ -6,8 +6,10 @@ import { authenticateJWT } from "../middleware/auth.js";
 
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = "your_super_secret_key"; // store in env variable in production
-const JWT_EXPIRES_IN = "1h"; // token expiration
+const JWT_SECRET = "your_super_secret_key";
+const JWT_REFRESH_SECRET = "your_super_refresh_secret";
+const JWT_EXPIRES_IN = "1h";
+const REFRESH_EXPIRES_IN = "30d";
 
 
 const router = express.Router();
@@ -48,7 +50,8 @@ router.post("/auth/register", async (req, res) => {
     email,
     password: hashedPassword,
     registeredAt: new Date().toISOString(),
-    logins: []
+    logins: [],
+    refreshTokens: []
   };
 
   users.push(newUser);
@@ -75,19 +78,72 @@ router.post("/auth/login", async (req, res) => {
   user.logins.push(loginTime);
   writeUsers(users);
 
-  // Generate JWT
-  const token = jwt.sign(
+  // Generate access token
+  const accessToken = jwt.sign(
     { id: user.id, name: user.name, email: user.email },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );
 
+  // Generate refresh token (30 days)
+  const refreshToken = jwt.sign(
+    { id: user.id },
+    JWT_REFRESH_SECRET,
+    { expiresIn: REFRESH_EXPIRES_IN }
+  );
+
+  // Store hashed refresh token
+  const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+  user.refreshTokens.push(hashedRefreshToken);
+  writeUsers(users);
+
   res.json({
     success: true,
-    token, // send JWT to client
-    user: { id: user.id, name: user.name, email: user.email, logins: user.logins }
+    accessToken,
+    refreshToken,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      logins: user.logins
+    }
   });
+
 });
+
+router.post("/auth/refresh", async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken)
+    return res.status(401).json({ error: "Refresh token required" });
+
+  try {
+    const payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    const users = readUsers();
+    const user = users.find(u => u.id === payload.id);
+
+    if (!user) return res.status(401).json({ error: "Invalid refresh token" });
+
+    // Check if refresh token exists
+    const isValid = await Promise.any(
+      user.refreshTokens.map(rt => bcrypt.compare(refreshToken, rt))
+    ).catch(() => false);
+
+    if (!isValid)
+      return res.status(401).json({ error: "Invalid refresh token" });
+
+    // Issue new access token
+    const newAccessToken = jwt.sign(
+      { id: user.id, name: user.name, email: user.email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    res.json({ accessToken: newAccessToken });
+  } catch (err) {
+    res.status(401).json({ error: "Refresh token expired or invalid" });
+  }
+});
+
 
 
 export default router;

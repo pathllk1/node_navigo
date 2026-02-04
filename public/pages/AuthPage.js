@@ -1,7 +1,7 @@
 export function AuthPage(onAuthSuccess) {
   // Check if a user is logged in
   const user = JSON.parse(localStorage.getItem("currentUser"));
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("accessToken");
 
   let html = "";
 
@@ -79,7 +79,8 @@ export function AuthPage(onAuthSuccess) {
       const logoutBtn = document.getElementById("auth-logout-btn");
       if (logoutBtn) logoutBtn.onclick = () => {
         localStorage.removeItem("currentUser");
-        localStorage.removeItem("token"); // remove JWT
+        localStorage.removeItem("accessToken"); // remove JWT
+        localStorage.removeItem("refreshToken");
         window.location.reload();
       };
 
@@ -142,7 +143,8 @@ export function AuthPage(onAuthSuccess) {
         });
         const data = await res.json();
         if (data.success) {
-          localStorage.setItem("token", data.token); // save JWT
+          localStorage.setItem("accessToken", data.accessToken); // save JWT
+          localStorage.setItem("refreshToken", data.refreshToken);
           localStorage.setItem("currentUser", JSON.stringify(data.user));
           onAuthSuccess(data.user);
         } else {
@@ -169,7 +171,7 @@ export function AuthPage(onAuthSuccess) {
         });
         const data = await res.json();
         if (data.success) {
-          localStorage.setItem("token", data.token);
+          localStorage.setItem("accessToken", data.token);
           localStorage.setItem("currentUser", JSON.stringify(data.user));
           msg.textContent = `Registered ${data.user.name}`;
           msg.className = "mt-2 text-sm text-green-600";
