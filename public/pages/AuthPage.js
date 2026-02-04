@@ -77,15 +77,17 @@ export function AuthPage(onAuthSuccess) {
 
   function scripts() {
     if (user) {
-      // Logout button
+      // Logout button - use addEventListener for CSP compliance
       const logoutBtn = document.getElementById("auth-logout-btn");
-      if (logoutBtn) logoutBtn.onclick = () => {
-        localStorage.removeItem("currentUser");
-        localStorage.removeItem("accessToken"); // remove JWT
-        localStorage.removeItem("refreshToken");
-        window.location.reload();
-        clearAccessTokenTimer();
-      };
+      if (logoutBtn) {
+        logoutBtn.addEventListener("click", () => {
+          localStorage.removeItem("currentUser");
+          localStorage.removeItem("accessToken"); // remove JWT
+          localStorage.removeItem("refreshToken");
+          window.location.reload();
+          clearAccessTokenTimer();
+        });
+      }
 
       // Fetch all users with JWT
       async function fetchUsers() {
@@ -94,13 +96,25 @@ export function AuthPage(onAuthSuccess) {
           if (!res.ok) throw new Error("Failed to fetch users");
           const users = await res.json();
           const usersList = document.getElementById("users-list");
-          usersList.innerHTML = users
-            .map(u => `<li>${u.name} (${u.email})</li>`)
-            .join("");
+          
+          // Clear existing content
+          usersList.innerHTML = "";
+          
+          // Use appendChild for CSP compliance instead of innerHTML
+          users.forEach(u => {
+            const li = document.createElement("li");
+            li.textContent = `${u.name} (${u.email})`;
+            usersList.appendChild(li);
+          });
         } catch (err) {
           console.error(err);
           const usersList = document.getElementById("users-list");
-          usersList.innerHTML = "<li class='text-red-500'>Could not load users</li>";
+          usersList.innerHTML = "";
+          
+          const li = document.createElement("li");
+          li.textContent = "Could not load users";
+          li.className = "text-red-500";
+          usersList.appendChild(li);
         }
       }
 
@@ -108,86 +122,93 @@ export function AuthPage(onAuthSuccess) {
       return;
     }
 
-    // Tabs + Login/Register logic (unchanged)
+    // Tabs + Login/Register logic - use addEventListener for CSP compliance
     const loginTab = document.getElementById("tab-login");
     const registerTab = document.getElementById("tab-register");
     const loginForm = document.getElementById("login-form");
     const registerForm = document.getElementById("register-form");
 
-    loginTab.onclick = () => {
+    loginTab.addEventListener("click", () => {
       loginForm.classList.remove("hidden");
       registerForm.classList.add("hidden");
       loginTab.classList.add("text-purple-700", "border-b-2", "border-purple-700");
       loginTab.classList.remove("text-gray-500");
       registerTab.classList.remove("text-purple-700", "border-b-2", "border-purple-700");
       registerTab.classList.add("text-gray-500");
-    };
-    registerTab.onclick = () => {
+    });
+
+    registerTab.addEventListener("click", () => {
       registerForm.classList.remove("hidden");
       loginForm.classList.add("hidden");
       registerTab.classList.add("text-purple-700", "border-b-2", "border-purple-700");
       registerTab.classList.remove("text-gray-500");
       loginTab.classList.remove("text-purple-700", "border-b-2", "border-purple-700");
       loginTab.classList.add("text-gray-500");
-    };
+    });
 
-    // Login
-    document.getElementById("login-btn").onclick = async () => {
-      const email = document.getElementById("login-email").value;
-      const password = document.getElementById("login-password").value;
-      const msg = document.getElementById("login-msg");
-      if (!email || !password) return msg.textContent = "Please fill all fields";
+    // Login button handler
+    const loginBtn = document.getElementById("login-btn");
+    if (loginBtn) {
+      loginBtn.addEventListener("click", async () => {
+        const email = document.getElementById("login-email").value;
+        const password = document.getElementById("login-password").value;
+        const msg = document.getElementById("login-msg");
+        if (!email || !password) return msg.textContent = "Please fill all fields";
 
-      try {
-        const res = await fetch("/auth/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password })
-        });
-        const data = await res.json();
-        if (data.success) {
-          localStorage.setItem("accessToken", data.accessToken); // save JWT
-          localStorage.setItem("refreshToken", data.refreshToken);
-          localStorage.setItem("currentUser", JSON.stringify(data.user));
-          onAuthSuccess(data.user);
-        } else {
-          msg.textContent = data.error;
+        try {
+          const res = await fetch("/auth/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+          });
+          const data = await res.json();
+          if (data.success) {
+            localStorage.setItem("accessToken", data.accessToken); // save JWT
+            localStorage.setItem("refreshToken", data.refreshToken);
+            localStorage.setItem("currentUser", JSON.stringify(data.user));
+            onAuthSuccess(data.user);
+          } else {
+            msg.textContent = data.error;
+          }
+        } catch (err) {
+          msg.textContent = "Server error";
         }
-      } catch (err) {
-        msg.textContent = "Server error";
-      }
-    };
+      });
+    }
 
-    // Register
-    document.getElementById("register-btn").onclick = async () => {
-      const name = document.getElementById("register-name").value;
-      const email = document.getElementById("register-email").value;
-      const password = document.getElementById("register-password").value;
-      const msg = document.getElementById("register-msg");
-      if (!name || !email || !password) return msg.textContent = "Please fill all fields";
+    // Register button handler
+    const registerBtn = document.getElementById("register-btn");
+    if (registerBtn) {
+      registerBtn.addEventListener("click", async () => {
+        const name = document.getElementById("register-name").value;
+        const email = document.getElementById("register-email").value;
+        const password = document.getElementById("register-password").value;
+        const msg = document.getElementById("register-msg");
+        if (!name || !email || !password) return msg.textContent = "Please fill all fields";
 
-      try {
-        const res = await fetch("/auth/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, password })
-        });
-        const data = await res.json();
-        if (data.success) {
-          localStorage.setItem("accessToken", data.token);
-          localStorage.setItem("currentUser", JSON.stringify(data.user));
-          msg.textContent = `Registered ${data.user.name}`;
-          msg.className = "mt-2 text-sm text-green-600";
-          onAuthSuccess(data.user);
-        } else {
-          msg.textContent = data.error;
+        try {
+          const res = await fetch("/auth/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, email, password })
+          });
+          const data = await res.json();
+          if (data.success) {
+            localStorage.setItem("accessToken", data.token);
+            localStorage.setItem("currentUser", JSON.stringify(data.user));
+            msg.textContent = `Registered ${data.user.name}`;
+            msg.className = "mt-2 text-sm text-green-600";
+            onAuthSuccess(data.user);
+          } else {
+            msg.textContent = data.error;
+            msg.className = "mt-2 text-sm text-red-500";
+          }
+        } catch (err) {
+          msg.textContent = "Server error";
           msg.className = "mt-2 text-sm text-red-500";
         }
-      } catch (err) {
-        msg.textContent = "Server error";
-        msg.className = "mt-2 text-sm text-red-500";
-      }
-    };
+      });
+    }
   }
 
   return { html, scripts };

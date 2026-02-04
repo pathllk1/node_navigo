@@ -7,7 +7,7 @@ export function Layout(innerHtml) {
     </nav>
 
     <!-- Sidebar (fixed) -->
-    <div id="sidebar" class="fixed top-16 left-0 bottom-0 bg-gradient-to-b from-purple-700 via-purple-600 to-indigo-700 text-white z-10 flex flex-col justify-between" data-collapsed="true" style="width:60px; transition: width 0.3s;">
+    <div id="sidebar" class="fixed top-16 left-0 bottom-0 bg-gradient-to-b from-purple-700 via-purple-600 to-indigo-700 text-white z-10 flex flex-col justify-between sidebar-collapsed" data-collapsed="true">
 
       <!-- Sidebar menu items -->
       <ul class="flex flex-col mt-4 space-y-2 relative">

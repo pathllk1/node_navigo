@@ -1,0 +1,59 @@
+/* Custom CSS for sidebar state management and other styling */
+
+/* Sidebar size states */
+.sidebar-collapsed {
+  width: 60px;
+  transition: width 0.3s ease;
+}
+
+.sidebar-expanded {
+  width: 180px;
+  transition: width 0.3s ease;
+}
+
+/* Main content margin states */
+.main-content-collapsed {
+  margin-left: 60px;
+  transition: margin-left 0.3s ease;
+}
+
+.main-content-expanded {
+  margin-left: 180px;
+  transition: margin-left 0.3s ease;
+}
+
+/* Toggle button rotation states */
+.toggle-collapsed {
+  transform: translateY(-50%) rotate(0deg);
+  transition: transform 0.3s ease;
+}
+
+.toggle-expanded {
+  transform: translateY(-50%) rotate(180deg);
+  transition: transform 0.3s ease;
+}
+
+/* Text visibility states */
+.sidebar-text-hidden {
+  display: none;
+}
+
+.sidebar-text-visible {
+  display: inline;
+}
+
+/* Generic visibility helper classes */
+.hidden-element {
+  display: none;
+}
+
+.visible-element {
+  display: block;
+}
+
+/* Iframe container styling */
+.iframe-fullscreen {
+  width: 100%;
+  height: 70vh;
+  border: 1px solid #ccc;
+}
