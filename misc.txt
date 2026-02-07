@@ -1,0 +1,11 @@
+Firm: ACME (Approved)
+  Admin:   admin@acme.com / admin123
+  Manager: manager@acme.com / manager123
+  User:    user@acme.com / user123
+
+Firm: BUILD (Pending Approval)
+  Admin:   admin@buildtech.com / build123
+  (Cannot login until firm is approved)
+
+Firm: METRO (Approved)
+  Admin:   admin@metro.com / metro123

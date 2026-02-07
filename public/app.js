@@ -6,6 +6,7 @@ import { ServicesPage } from "./pages/services.js";
 import { AuthPage } from "./pages/AuthPage.js";
 import { ServerInfoPage } from "./pages/server-info.js";
 import { TstPage } from "./pages/tst.js";
+import {MasterRollDashboard} from "./pages/MasterRollDashboard.js";
 import { Layout } from "./layout.js";
 import "./api.js";
 import { startAccessTokenTimer } from "./api.js";
@@ -58,6 +59,7 @@ router
   .on("/services", () => renderPage(ServicesPage()))
   .on("/server-info", () => renderPage(ServerInfoPage()))
   .on("/auth", () => renderPage(AuthPage(handleAuthSuccess)))
+  .on("/masterroll", () => renderPage(MasterRollDashboard()))
   .on("/tst", () => renderPage(TstPage()))
   .on("/not-found", () =>
     renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => { } })

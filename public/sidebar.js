@@ -108,8 +108,9 @@ export function initSidebar(currentUser, handleLogout) {
   if (currentUser) {
     const authItem = sidebar.querySelector('a[href="/auth"]');
     if (authItem) {
-      authItem.querySelector(".sidebar-text").textContent = currentUser.name;
-      authItem.dataset.tooltip = currentUser.name;
+      // FIX: Changed currentUser.name to currentUser.fullname
+      authItem.querySelector(".sidebar-text").textContent = currentUser.fullname;
+      authItem.dataset.tooltip = currentUser.fullname;
 
       let existingLogin = authItem.querySelector(".sidebar-last-login");
       if (existingLogin) existingLogin.remove();
@@ -117,12 +118,16 @@ export function initSidebar(currentUser, handleLogout) {
       const lastLoginContainer = document.createElement("div");
       lastLoginContainer.className = "text-xs text-gray-300 sidebar-last-login";
 
-      let lastLogin = "Never";
-      if (currentUser.logins && currentUser.logins.length > 0) {
-        const latest = currentUser.logins[currentUser.logins.length - 1];
-        lastLogin = new Date(latest).toLocaleString();
+      let lastLoginText = "First login";
+      
+      if (currentUser.last_login) {
+         // Convert UTC string from DB to local readable time
+         lastLoginText = new Date(currentUser.last_login).toLocaleString();
       }
-      lastLoginContainer.textContent = `Last login: ${lastLogin}`;
+      
+      lastLoginContainer.textContent = `Last login: ${lastLoginText}`;
+      // ----------------------
+      
       authItem.appendChild(lastLoginContainer);
 
       // Set initial visibility based on collapse state

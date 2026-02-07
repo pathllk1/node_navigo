@@ -1,11 +1,13 @@
+import './utils/db.js' // Initialize the database and create tables
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import bodyParser from "body-parser";
+
 
 import apiRoutes from "./routes/api.js";
 import authRoutes from "./routes/auth.js";
 import tstRoutes from "./routes/tst.js";
+import masterRollRoutes from './routes/masterRoll.routes.js';
 import { authenticateJWT } from "./middleware/auth.js";
 
 
@@ -54,6 +56,7 @@ app.use((req, res, next) => {
 app.use("/api", apiRoutes);
 app.use("/auth", authRoutes);
 app.use("/tst", authenticateJWT, tstRoutes);
+app.use('/api/master-rolls', authenticateJWT, masterRollRoutes);
 
 // SPA fallback for all other routes
 app.get(/.*/, (req, res) => {
