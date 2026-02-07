@@ -164,6 +164,25 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_wages_firm_id 
   ON wages(firm_id);
 
+  -- Compound index on wages for efficient month-based queries
+  CREATE INDEX IF NOT EXISTS idx_wages_firm_month 
+  ON wages(firm_id, salary_month);
+
+  -- Unique constraint on wages (firm_id, master_roll_id, salary_month)
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_wages_unique_firm_employee_month 
+  ON wages(firm_id, master_roll_id, salary_month);
+
+  -- Index on wages master_roll_id
+  CREATE INDEX IF NOT EXISTS idx_wages_master_roll_id 
+  ON wages(master_roll_id);
+
+  -- Index on master_rolls dates for wage eligibility queries
+  CREATE INDEX IF NOT EXISTS idx_master_rolls_joining_date 
+  ON master_rolls(date_of_joining);
+
+  CREATE INDEX IF NOT EXISTS idx_master_rolls_exit_date 
+  ON master_rolls(date_of_exit);
+
   -- Index on users firm_id
   CREATE INDEX IF NOT EXISTS idx_users_firm_id 
   ON users(firm_id);
@@ -337,7 +356,11 @@ export const Wage = {
       wage_days,
       gross_salary,
       net_salary,
-      salary_month
+      salary_month,
+      epf_deduction,
+      esic_deduction,
+      other_deduction,
+      other_benefit
     ) VALUES (
       @firm_id,
       @master_roll_id,
@@ -345,16 +368,73 @@ export const Wage = {
       @wage_days,
       @gross_salary,
       @net_salary,
-      @salary_month
+      @salary_month,
+      @epf_deduction,
+      @esic_deduction,
+      @other_deduction,
+      @other_benefit
     )
   `),
 
-  getById: db.prepare(`SELECT * FROM wages WHERE id = ?`),
+  getById: db.prepare(`
+    SELECT w.*, mr.employee_name, mr.aadhar, f.name as firm_name
+    FROM wages w
+    JOIN master_rolls mr ON mr.id = w.master_roll_id
+    JOIN firms f ON f.id = w.firm_id
+    WHERE w.id = ? AND w.firm_id = ?
+  `),
 
   getByFirm: db.prepare(`
     SELECT * FROM wages 
     WHERE firm_id = ?
-    ORDER BY created_at DESC
+    ORDER BY salary_month DESC, created_at DESC
+  `),
+
+  getByFirmAndMonth: db.prepare(`
+    SELECT w.*, mr.employee_name, mr.aadhar
+    FROM wages w
+    JOIN master_rolls mr ON mr.id = w.master_roll_id
+    WHERE w.firm_id = ? AND w.salary_month = ?
+    ORDER BY mr.employee_name
+  `),
+
+  getLastWageForEmployee: db.prepare(`
+    SELECT wage_days, gross_salary, salary_month
+    FROM wages
+    WHERE master_roll_id = ? AND firm_id = ?
+    ORDER BY salary_month DESC
+    LIMIT 1
+  `),
+
+  update: db.prepare(`
+    UPDATE wages
+    SET 
+      p_day_wage = @p_day_wage,
+      wage_days = @wage_days,
+      gross_salary = @gross_salary,
+      epf_deduction = @epf_deduction,
+      esic_deduction = @esic_deduction,
+      other_deduction = @other_deduction,
+      other_benefit = @other_benefit,
+      net_salary = @net_salary,
+      updated_at = datetime('now')
+    WHERE id = ? AND firm_id = ?
+  `),
+
+  delete: db.prepare(`
+    DELETE FROM wages
+    WHERE id = ? AND firm_id = ?
+  `),
+
+  checkExists: db.prepare(`
+    SELECT id FROM wages
+    WHERE firm_id = ? AND master_roll_id = ? AND salary_month = ?
+  `),
+
+  getBulkByIds: db.prepare(`
+    SELECT * FROM wages
+    WHERE id IN (SELECT id FROM wages WHERE firm_id = ?)
+    ORDER BY salary_month DESC
   `)
 };
 

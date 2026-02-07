@@ -8,6 +8,7 @@ import apiRoutes from "./routes/api.js";
 import authRoutes from "./routes/auth.js";
 import tstRoutes from "./routes/tst.js";
 import masterRollRoutes from './routes/masterRoll.routes.js';
+import wagesRoutes from './routes/wages.routes.js';
 import { authenticateJWT } from "./middleware/auth.js";
 
 
@@ -57,6 +58,7 @@ app.use("/api", apiRoutes);
 app.use("/auth", authRoutes);
 app.use("/tst", authenticateJWT, tstRoutes);
 app.use('/api/master-rolls', authenticateJWT, masterRollRoutes);
+app.use('/api/wages', authenticateJWT, wagesRoutes);
 
 // SPA fallback for all other routes
 app.get(/.*/, (req, res) => {
