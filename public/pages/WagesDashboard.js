@@ -1,4 +1,7 @@
 import * as XLSX from "/cdns/xlsx.mjs";
+import { renderTabs } from "/components/wages/renderTabs.js";
+import { renderCreateMode } from "/components/wages/renderCreateMode.js";
+import { renderManageMode } from "/components/wages/renderManageMode.js";
 
 export function WagesDashboard() {
   // ==========================================
@@ -90,6 +93,23 @@ let createRenderDebounceTimer = null;
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const [year, month] = yearMonth.split('-');
     return `${months[parseInt(month) - 1]} ${year}`;
+  }
+
+  function inputValue(value) {
+    if (value === null || value === undefined) return '';
+    return value;
+  }
+
+  function toNumber(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function toInt(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? Math.trunc(value) : 0;
+    const parsed = parseInt(value);
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
   function formatCurrency(amount) {
@@ -423,10 +443,23 @@ function handleCreateFieldChange(empId, field, value) {
   }
 
   async function saveEditedWages() {
-    const wagesToUpdate = Object.keys(editedWages).map(id => ({
-      id: parseInt(id),
-      ...editedWages[id]
-    }));
+    const wagesToUpdate = Object.keys(editedWages).map(id => {
+      const edited = editedWages[id];
+      return {
+        id: parseInt(id),
+        ...edited,
+        wage_days: toInt(edited.wage_days),
+        p_day_wage: toNumber(edited.p_day_wage),
+        gross_salary: toNumber(edited.gross_salary),
+        epf_deduction: toNumber(edited.epf_deduction),
+        esic_deduction: toNumber(edited.esic_deduction),
+        other_deduction: toNumber(edited.other_deduction),
+        other_benefit: toNumber(edited.other_benefit),
+        paid_date: edited.paid_date || null,
+        cheque_no: edited.cheque_no || null,
+        paid_from_bank_ac: edited.paid_from_bank_ac || null
+      };
+    });
 
     if (wagesToUpdate.length === 0) {
       showToast('No changes to save', 'warning');
@@ -579,12 +612,14 @@ function handleCreateFieldChange(empId, field, value) {
       editedWages[wageId] = { ...wage };
     }
 
-    editedWages[wageId][field] = field === 'wage_days' ? parseInt(value) : parseFloat(value);
+    // Preserve raw input so we don't break cursor position during edits
+    editedWages[wageId][field] = value;
 
     // Auto-recalculate if wage_days changes
     if (field === 'wage_days') {
       const perDayWage = wage.p_day_wage || 0;
-      editedWages[wageId].gross_salary = parseFloat((perDayWage * editedWages[wageId].wage_days).toFixed(2));
+      const wageDaysNumber = toInt(value);
+      editedWages[wageId].gross_salary = parseFloat((perDayWage * wageDaysNumber).toFixed(2));
     }
 
     render();
@@ -769,954 +804,6 @@ function handleCreateFieldChange(empId, field, value) {
   /* --------------------------------------------------
      RENDER FUNCTIONS
   -------------------------------------------------- */
-
-  function renderTabs() {
-    return `
-      <div class="tabs" style="border-bottom: 2px solid #e5e7eb; margin-bottom: 20px;">
-        <button 
-          class="tab-btn ${activeTab === 'create' ? 'active' : ''}" 
-          data-action="switch-tab"
-          data-tab="create"
-          style="
-            padding: 12px 24px;
-            background: ${activeTab === 'create' ? '#3b82f6' : 'transparent'};
-            color: ${activeTab === 'create' ? 'white' : '#6b7280'};
-            border: none;
-            border-bottom: 3px solid ${activeTab === 'create' ? '#3b82f6' : 'transparent'};
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-          "
-        >
-          📝 Create Wages
-        </button>
-        <button 
-          class="tab-btn ${activeTab === 'manage' ? 'active' : ''}" 
-          data-action="switch-tab"
-          data-tab="manage"
-          style="
-            padding: 12px 24px;
-            background: ${activeTab === 'manage' ? '#3b82f6' : 'transparent'};
-            color: ${activeTab === 'manage' ? 'white' : '#6b7280'};
-            border: none;
-            border-bottom: 3px solid ${activeTab === 'manage' ? '#3b82f6' : 'transparent'};
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-          "
-        >
-          ✏️ Manage Wages
-        </button>
-      </div>
-    `;
-  }
-
-  function renderCreateMode() {
-    const filteredEmployees = getFilteredCreateEmployees();
-    const uniqueBanks = getUniqueValues(employees, 'bank');
-    const uniqueProjects = getUniqueValues(employees, 'project');
-    const uniqueSites = getUniqueValues(employees, 'site');
-    
-    return `
-      <div class="create-mode">
-        <!-- Controls -->
-        <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px;">
-          <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-            <div>
-              <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Month</label>
-              <input 
-                type="month" 
-                value="${selectedMonth}"
-                data-action="set-month"
-                style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;"
-              />
-            </div>
-            
-            <div style="margin-top: auto;">
-              <button 
-                data-action="load-employees" 
-                ${isLoading ? 'disabled' : ''}
-                style="
-                  padding: 8px 16px;
-                  background: #3b82f6;
-                  color: white;
-                  border: none;
-                  border-radius: 6px;
-                  cursor: pointer;
-                  font-weight: 600;
-                "
-              >
-                ${isLoading ? '⏳ Loading...' : '🔄 Load Unpaid Employees'}
-              </button>
-            </div>
-
-            ${employees.length > 0 ? `
-              <div style="margin-top: auto;">
-                <button 
-                  data-action="calculate-bulk"
-                  style="
-                    padding: 8px 16px;
-                    background: #10b981;
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 600;
-                  "
-                >
-                  🧮 Calculate All
-                </button>
-              </div>
-
-              <div style="margin-top: auto;">
-                <button 
-                  data-action="save-wages"
-                  ${isLoading || selectedEmployeeIds.size === 0 ? 'disabled' : ''}
-                  style="
-                    padding: 8px 16px;
-                    background: ${selectedEmployeeIds.size === 0 ? '#9ca3af' : '#059669'};
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    cursor: ${selectedEmployeeIds.size === 0 ? 'not-allowed' : 'pointer'};
-                    font-weight: 600;
-                  "
-                >
-                  💾 Save Wages ${selectedEmployeeIds.size > 0 ? `(${selectedEmployeeIds.size})` : ''}
-                </button>
-              </div>
-
-              <div style="margin-top: auto;">
-                <button 
-                  data-action="export-excel"
-                  style="
-                    padding: 8px 16px;
-                    background: #6366f1;
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 600;
-                  "
-                >
-                  📊 Export
-                </button>
-              </div>
-            ` : ''}
-          </div>
-
-          ${employees.length > 0 ? `
-            <!-- Filters -->
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-              <h4 style="margin-bottom: 10px; color: #374151; font-size: 14px; font-weight: 600;">🔍 Filters</h4>
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                <div>
-                  <input 
-                    type="text" 
-                    placeholder="Search by name, aadhar, account..."
-                    value="${createFilters.searchTerm}"
-                    data-action="search-filter"
-                    data-mode="create"
-                    data-field="searchTerm"
-                    style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
-                  />
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="set-filter"
-                    data-mode="create"
-                    data-field="bankFilter"
-                    style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
-                  >
-                    <option value="all" ${createFilters.bankFilter === 'all' ? 'selected' : ''}>All Banks</option>
-                    ${uniqueBanks.map(bank => `<option value="${bank}" ${createFilters.bankFilter === bank ? 'selected' : ''}>${bank}</option>`).join('')}
-                  </select>
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="set-filter"
-                    data-mode="create"
-                    data-field="projectFilter"
-                    style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
-                  >
-                    <option value="all" ${createFilters.projectFilter === 'all' ? 'selected' : ''}>All Projects</option>
-                    ${uniqueProjects.map(proj => `<option value="${proj}" ${createFilters.projectFilter === proj ? 'selected' : ''}>${proj}</option>`).join('')}
-                  </select>
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="set-filter"
-                    data-mode="create"
-                    data-field="siteFilter"
-                    style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
-                  >
-                    <option value="all" ${createFilters.siteFilter === 'all' ? 'selected' : ''}>All Sites</option>
-                    ${uniqueSites.map(site => `<option value="${site}" ${createFilters.siteFilter === site ? 'selected' : ''}>${site}</option>`).join('')}
-                  </select>
-                </div>
-                
-                <div>
-                  <button 
-                    data-action="reset-filters"
-                    data-mode="create"
-                    style="
-                      padding: 6px 12px;
-                      background: #ef4444;
-                      color: white;
-                      border: none;
-                      border-radius: 4px;
-                      cursor: pointer;
-                      font-weight: 600;
-                      font-size: 13px;
-                    "
-                  >
-                    🔄 Reset
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Totals Section -->
-            ${selectedEmployeeIds.size > 0 ? `
-              <div style="margin-top: 15px; padding: 15px; background: linear-gradient(135deg, #f0fdf4, #fef2f2); border-radius: 8px; border: 1px solid #e5e7eb;">
-                <h4 style="margin-bottom: 10px; color: #374151; font-size: 13px; font-weight: 600;">📊 Summary (${selectedEmployeeIds.size} selected)</h4>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-                  <div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #ef4444;">
-                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">Total Gross Salary</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #059669;">${formatCurrency(Array.from(selectedEmployeeIds).reduce((sum, empId) => {
-                      const wage = wageData[empId] || {};
-                      return sum + (wage.gross_salary || 0);
-                    }, 0))}</div>
-                  </div>
-                  <div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #10b981;">
-                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">Total Net Salary</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #059669;">${formatCurrency(Array.from(selectedEmployeeIds).reduce((sum, empId) => {
-                      const wage = wageData[empId] || {};
-                      return sum + calculateNetSalary(wage.gross_salary, wage.epf_deduction, wage.esic_deduction, wage.other_deduction, wage.other_benefit);
-                    }, 0))}</div>
-                  </div>
-                </div>
-              </div>
-            ` : ''}
-
-            <!-- Common Payment Details -->
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-              <h4 style="margin-bottom: 10px; color: #374151; font-size: 14px; font-weight: 600;">💳 Common Payment Details (optional)</h4>
-              <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <div>
-                  <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #6b7280;">Paid Date</label>
-                  <input 
-                    type="date" 
-                    value="${commonPaymentData.paid_date}"
-                    data-action="set-payment"
-                    data-field="paid_date"
-                    style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
-                  />
-                </div>
-                <div>
-                  <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #6b7280;">Cheque No</label>
-                  <input 
-                    type="text" 
-                    value="${commonPaymentData.cheque_no}"
-                    data-action="set-payment"
-                    data-field="cheque_no"
-                    placeholder="Optional"
-                    style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; width: 150px;"
-                  />
-                </div>
-                <div>
-                  <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #6b7280;">Paid From Bank A/C</label>
-                  <input 
-                    type="text" 
-                    value="${commonPaymentData.paid_from_bank_ac}"
-                    data-action="set-payment"
-                    data-field="paid_from_bank_ac"
-                    placeholder="Optional"
-                    style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; width: 200px;"
-                  />
-                </div>
-              </div>
-            </div>
-          ` : ''}
-        </div>
-
-        <!-- Employee Table -->
-        ${employees.length > 0 ? `
-          <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h3 style="margin-bottom: 15px; color: #1f2937;">
-              Employees for ${formatMonthDisplay(selectedMonth)} 
-              <span style="color: #6b7280; font-size: 14px;">
-                (${filteredEmployees.length} of ${employees.length} employees)
-                ${selectedEmployeeIds.size > 0 ? `<span style="color: #3b82f6;"> • ${selectedEmployeeIds.size} selected</span>` : ''}
-              </span>
-            </h3>
-            
-            <div style="overflow-x: auto;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                <thead>
-                  <tr style="background: linear-gradient(to right, #ef4444, #10b981); border-bottom: 2px solid #e5e7eb;">
-                    <th style="padding: 12px; text-align: center; color: white; font-weight: 600;">
-                      <input 
-                        type="checkbox" 
-                        ${selectedEmployeeIds.size === filteredEmployees.length && filteredEmployees.length > 0 ? 'checked' : ''}
-                        data-action="select-all-employees"
-                        style="cursor: pointer; width: 16px; height: 16px;"
-                      />
-                    </th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="employee_name" data-mode="create">Employee ${createSort.column === 'employee_name' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600; color: white;">Bank Details</th>
-                    <th style="padding: 12px; text-align: center; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="p_day_wage" data-mode="create">Per Day ${createSort.column === 'p_day_wage' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: center; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="wage_days" data-mode="create">Days ${createSort.column === 'wage_days' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="gross_salary" data-mode="create">Gross ${createSort.column === 'gross_salary' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="epf_deduction" data-mode="create">EPF ${createSort.column === 'epf_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="esic_deduction" data-mode="create">ESIC ${createSort.column === 'esic_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="other_deduction" data-mode="create">Other Ded ${createSort.column === 'other_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="other_benefit" data-mode="create">Other Ben ${createSort.column === 'other_benefit' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="net_salary" data-mode="create">Net Salary ${createSort.column === 'net_salary' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${sortArray(filteredEmployees, createSort.column, createSort.asc).map(emp => {
-                    const wage = wageData[emp.master_roll_id] || {};
-                    const isSelected = selectedEmployeeIds.has(emp.master_roll_id);
-                    const netSalary = calculateNetSalary(
-                      wage.gross_salary,
-                      wage.epf_deduction,
-                      wage.esic_deduction,
-                      wage.other_deduction,
-                      wage.other_benefit
-                    );
-                    
-                    return `
-                      <tr style="border-bottom: 1px solid #e5e7eb; background: ${isSelected ? '#eff6ff' : 'white'};">
-                        <td style="padding: 12px; text-align: center;">
-                          <input 
-                            type="checkbox" 
-                            ${isSelected ? 'checked' : ''}
-                            data-action="toggle-employee"
-                            data-emp-id="${emp.master_roll_id}"
-                            style="cursor: pointer; width: 16px; height: 16px;"
-                          />
-                        </td>
-                        <td style="padding: 12px;">
-                          <div style="font-weight: 600; color: #1f2937;">${emp.employee_name}</div>
-                          <div style="font-size: 11px; color: #6b7280;">${emp.project || 'N/A'} - ${emp.site || 'N/A'}</div>
-                        </td>
-                        <td style="padding: 12px;">
-                          <div style="font-size: 13px; color: #374151;">${emp.bank}</div>
-                          <div style="font-size: 11px; color: #6b7280;">${emp.account_no}</div>
-                        </td>
-                        <td style="padding: 12px; text-align: center;">
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value="${wage.p_day_wage || emp.p_day_wage || 0}"
-                            data-action="edit-employee"
-                            data-emp-id="${emp.master_roll_id}"
-                            data-field="p_day_wage"
-                            style="width: 80px; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; text-align: right; font-size: 13px;"
-                          />
-                        </td>
-                        <td style="padding: 12px; text-align: center;">
-                          <input 
-                            type="number" 
-                            value="${wage.wage_days || 26}"
-                            data-action="edit-employee"
-                            data-emp-id="${emp.master_roll_id}"
-                            data-field="wage_days"
-                            style="width: 60px; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center; font-size: 13px;"
-                          />
-                        </td>
-                        <td style="padding: 12px; text-align: right;">
-                          <input 
-                            type="number" 
-                            value="${wage.gross_salary || 0}"
-                            readonly
-                            style="width: 100px; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; background: #f9fafb; text-align: right; font-size: 13px; color: #374151;"
-                          />
-                        </td>
-                        <td style="padding: 12px; text-align: right;">
-  <input 
-    type="number" 
-    step="0.01"
-    value="${wage.epf_deduction || 0}"
-    data-action="edit-employee"
-    data-emp-id="${emp.master_roll_id}"
-    data-field="epf_deduction"
-    style="width: 80px; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; text-align: right; font-size: 13px;"
-  />
-</td>
-                        <td style="padding: 12px; text-align: right;">
-  <input 
-    type="number" 
-    step="0.01"
-    value="${wage.esic_deduction || 0}"
-    data-action="edit-employee"
-    data-emp-id="${emp.master_roll_id}"
-    data-field="esic_deduction"
-    style="width: 80px; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; text-align: right; font-size: 13px;"
-  />
-</td>
-                        <td style="padding: 12px; text-align: right;">
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value="${wage.other_deduction || 0}"
-                            data-action="edit-employee"
-                            data-emp-id="${emp.master_roll_id}"
-                            data-field="other_deduction"
-                            style="width: 80px; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; text-align: right; font-size: 13px;"
-                          />
-                        </td>
-                        <td style="padding: 12px; text-align: right;">
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value="${wage.other_benefit || 0}"
-                            data-action="edit-employee"
-                            data-emp-id="${emp.master_roll_id}"
-                            data-field="other_benefit"
-                            style="width: 80px; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; text-align: right; font-size: 13px;"
-                          />
-                        </td>
-                        <td style="padding: 12px; text-align: right;">
-                          <input 
-                            type="number" 
-                            value="${netSalary.toFixed(2)}"
-                            data-employee="${emp.master_roll_id}"
-                            data-field="net_salary"
-                            readonly
-                            style="width: 110px; padding: 6px; border: 2px solid #10b981; border-radius: 4px; background: #ecfdf5; text-align: right; font-weight: 600; color: #059669; font-size: 13px;"
-                          />
-                        </td>
-                      </tr>
-                    `;
-                  }).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ` : `
-          <div style="background: white; padding: 40px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
-            <div style="font-size: 48px; margin-bottom: 16px;">📋</div>
-            <h3 style="color: #6b7280; margin-bottom: 8px;">No Employees Loaded</h3>
-            <p style="color: #9ca3af;">Select a month and click "Load Unpaid Employees" to get started</p>
-          </div>
-        `}
-      </div>
-    `;
-  }
-
-  function renderManageMode() {
-    const filteredWages = getFilteredManageWages();
-    const uniqueBanks = getUniqueValues(existingWages, 'bank');
-    const uniqueProjects = getUniqueValues(existingWages, 'project');
-    const uniqueSites = getUniqueValues(existingWages, 'site');
-    
-    return `
-      <div class="manage-mode">
-        <!-- Controls -->
-        <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px;">
-          <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-            <div>
-              <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #374151;">Month</label>
-              <input 
-                type="month" 
-                value="${manageMonth}"
-                data-action="set-manage-month"
-                style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;"
-              />
-            </div>
-            
-            <div style="margin-top: auto;">
-              <button 
-                data-action="load-manage-wages" 
-                ${isManageLoading ? 'disabled' : ''}
-                style="
-                  padding: 8px 16px;
-                  background: #3b82f6;
-                  color: white;
-                  border: none;
-                  border-radius: 6px;
-                  cursor: pointer;
-                  font-weight: 600;
-                "
-              >
-                ${isManageLoading ? '⏳ Loading...' : '🔄 Load Wages'}
-              </button>
-            </div>
-
-            ${existingWages.length > 0 ? `
-              ${selectedWageIds.size > 0 ? `
-                <div style="margin-top: auto;">
-                  <button 
-                    data-action="toggle-bulk-edit"
-                    style="
-                      padding: 8px 16px;
-                      background: ${isBulkEditMode ? '#dc2626' : '#8b5cf6'};
-                      color: white;
-                      border: none;
-                      border-radius: 6px;
-                      cursor: pointer;
-                      font-weight: 600;
-                    "
-                  >
-                    ${isBulkEditMode ? '❌ Cancel Bulk Edit' : '✏️ Bulk Edit (' + selectedWageIds.size + ')'}
-                  </button>
-                </div>
-
-                <div style="margin-top: auto;">
-                  <button 
-                    data-action="delete-selected"
-                    style="
-                      padding: 8px 16px;
-                      background: #ef4444;
-                      color: white;
-                      border: none;
-                      border-radius: 6px;
-                      cursor: pointer;
-                      font-weight: 600;
-                    "
-                  >
-                    🗑️ Delete Selected (${selectedWageIds.size})
-                  </button>
-                </div>
-              ` : ''}
-
-              ${Object.keys(editedWages).length > 0 ? `
-                <div style="margin-top: auto;">
-                  <button 
-                    data-action="save-edited"
-                    ${isManageLoading ? 'disabled' : ''}
-                    style="
-                      padding: 8px 16px;
-                      background: #059669;
-                      color: white;
-                      border: none;
-                      border-radius: 6px;
-                      cursor: pointer;
-                      font-weight: 600;
-                    "
-                  >
-                    💾 Save Changes (${Object.keys(editedWages).length})
-                  </button>
-                </div>
-              ` : ''}
-
-              <div style="margin-top: auto;">
-                <button 
-                  data-action="export-excel"
-                  style="
-                    padding: 8px 16px;
-                    background: #6366f1;
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 600;
-                  "
-                >
-                  📊 Export
-                </button>
-              </div>
-            ` : ''}
-          </div>
-
-          ${existingWages.length > 0 ? `
-            <!-- Manage Mode Totals Section -->
-            ${selectedWageIds.size > 0 ? `
-              <div style="margin-top: 15px; padding: 15px; background: linear-gradient(135deg, #f0fdf4, #fef2f2); border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 15px;">
-                <h4 style="margin-bottom: 10px; color: #374151; font-size: 13px; font-weight: 600;">📊 Summary (${selectedWageIds.size} selected)</h4>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-                  <div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #ef4444;">
-                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">Total Gross Salary</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #059669;">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
-                      const wage = existingWages.find(w => w.id === wageId);
-                      const edited = editedWages[wageId] || wage;
-                      return sum + (edited ? edited.gross_salary : 0);
-                    }, 0))}</div>
-                  </div>
-                  <div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #10b981;">
-                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">Total Net Salary</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #059669;">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
-                      const wage = existingWages.find(w => w.id === wageId);
-                      const edited = editedWages[wageId] || wage;
-                      return sum + calculateNetSalary(edited.gross_salary, edited.epf_deduction, edited.esic_deduction, edited.other_deduction, edited.other_benefit);
-                    }, 0))}</div>
-                  </div>
-                </div>
-              </div>
-            ` : ''}
-
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-              <h4 style="margin-bottom: 10px; color: #374151; font-size: 14px; font-weight: 600;">🔍 Filters</h4>
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                <div>
-                  <input 
-                    type="text" 
-                    placeholder="Search by name, aadhar, account..."
-                    value="${manageFilters.searchTerm}"
-                    data-action="search-filter"
-                    data-mode="manage"
-                    data-field="searchTerm"
-                    style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
-                  />
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="set-filter"
-                    data-mode="manage"
-                    data-field="bankFilter"
-                    style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
-                  >
-                    <option value="all" ${manageFilters.bankFilter === 'all' ? 'selected' : ''}>All Banks</option>
-                    ${uniqueBanks.map(bank => `<option value="${bank}" ${manageFilters.bankFilter === bank ? 'selected' : ''}>${bank}</option>`).join('')}
-                  </select>
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="set-filter"
-                    data-mode="manage"
-                    data-field="projectFilter"
-                    style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
-                  >
-                    <option value="all" ${manageFilters.projectFilter === 'all' ? 'selected' : ''}>All Projects</option>
-                    ${uniqueProjects.map(proj => `<option value="${proj}" ${manageFilters.projectFilter === proj ? 'selected' : ''}>${proj}</option>`).join('')}
-                  </select>
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="set-filter"
-                    data-mode="manage"
-                    data-field="siteFilter"
-                    style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
-                  >
-                    <option value="all" ${manageFilters.siteFilter === 'all' ? 'selected' : ''}>All Sites</option>
-                    ${uniqueSites.map(site => `<option value="${site}" ${manageFilters.siteFilter === site ? 'selected' : ''}>${site}</option>`).join('')}
-                  </select>
-                </div>
-                
-                <div>
-                  <button 
-                    data-action="reset-filters"
-                    data-mode="manage"
-                    style="
-                      padding: 6px 12px;
-                      background: #ef4444;
-                      color: white;
-                      border: none;
-                      border-radius: 4px;
-                      cursor: pointer;
-                      font-weight: 600;
-                      font-size: 13px;
-                    "
-                  >
-                    🔄 Reset
-                  </button>
-                </div>
-              </div>
-            </div>
-          ` : ''}
-        </div>
-
-        <!-- Bulk Edit Panel -->
-        ${isBulkEditMode ? `
-          <div style="background: #f0f9ff; border: 2px solid #3b82f6; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h4 style="margin-bottom: 15px; color: #1e40af;">
-              🎯 Bulk Edit Mode - Editing ${selectedWageIds.size} wage records
-            </h4>
-            <p style="margin-bottom: 15px; color: #6b7280; font-size: 14px;">
-              Enter values for the fields you want to update. Leave blank to keep existing values.
-            </p>
-            
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-              <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #374151; font-weight: 600;">Wage Days</label>
-                <input 
-                  type="number" 
-                  value="${bulkEditData.wage_days}"
-                  data-action="set-bulk-edit"
-                  data-field="wage_days"
-                  placeholder="Leave blank to skip"
-                  style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"
-                />
-              </div>
-              
-              <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #374151; font-weight: 600;">EPF Deduction</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  value="${bulkEditData.epf_deduction}"
-                  data-action="set-bulk-edit"
-                  data-field="epf_deduction"
-                  placeholder="Leave blank to skip"
-                  style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"
-                />
-              </div>
-              
-              <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #374151; font-weight: 600;">ESIC Deduction</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  value="${bulkEditData.esic_deduction}"
-                  data-action="set-bulk-edit"
-                  data-field="esic_deduction"
-                  placeholder="Leave blank to skip"
-                  style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"
-                />
-              </div>
-              
-              <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #374151; font-weight: 600;">Other Deduction</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  value="${bulkEditData.other_deduction}"
-                  data-action="set-bulk-edit"
-                  data-field="other_deduction"
-                  placeholder="Leave blank to skip"
-                  style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"
-                />
-              </div>
-              
-              <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #374151; font-weight: 600;">Other Benefit</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  value="${bulkEditData.other_benefit}"
-                  data-action="set-bulk-edit"
-                  data-field="other_benefit"
-                  placeholder="Leave blank to skip"
-                  style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"
-                />
-              </div>
-              
-              <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #374151; font-weight: 600;">Paid Date</label>
-                <input 
-                  type="date" 
-                  value="${bulkEditData.paid_date}"
-                  data-action="set-bulk-edit"
-                  data-field="paid_date"
-                  style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"
-                />
-              </div>
-              
-              <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #374151; font-weight: 600;">Cheque No</label>
-                <input 
-                  type="text" 
-                  value="${bulkEditData.cheque_no}"
-                  data-action="set-bulk-edit"
-                  data-field="cheque_no"
-                  placeholder="Leave blank to skip"
-                  style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"
-                />
-              </div>
-              
-              <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #374151; font-weight: 600;">Paid From Bank A/C</label>
-                <input 
-                  type="text" 
-                  value="${bulkEditData.paid_from_bank_ac}"
-                  data-action="set-bulk-edit"
-                  data-field="paid_from_bank_ac"
-                  placeholder="Leave blank to skip"
-                  style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"
-                />
-              </div>
-            </div>
-            
-            <div style="margin-top: 15px; display: flex; gap: 10px;">
-              <button 
-                data-action="apply-bulk-edit"
-                style="
-                  padding: 10px 20px;
-                  background: #059669;
-                  color: white;
-                  border: none;
-                  border-radius: 6px;
-                  cursor: pointer;
-                  font-weight: 600;
-                "
-              >
-                ✅ Apply Bulk Edit
-              </button>
-              <button 
-                data-action="toggle-bulk-edit"
-                style="
-                  padding: 10px 20px;
-                  background: #6b7280;
-                  color: white;
-                  border: none;
-                  border-radius: 6px;
-                  cursor: pointer;
-                  font-weight: 600;
-                "
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Wages Table -->
-        ${existingWages.length > 0 ? `
-          <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h3 style="margin-bottom: 15px; color: #1f2937;">
-              Wage Records for ${formatMonthDisplay(manageMonth)}
-              <span style="color: #6b7280; font-size: 14px;">(${filteredWages.length} of ${existingWages.length} records)</span>
-              ${Object.keys(editedWages).length > 0 ? `
-                <span style="color: #f59e0b; font-size: 14px; margin-left: 10px;">⚠️ ${Object.keys(editedWages).length} unsaved changes</span>
-              ` : ''}
-            </h3>
-            
-            <div style="overflow-x: auto;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                <thead>
-                  <tr style="background: linear-gradient(to right, #ef4444, #10b981); border-bottom: 2px solid #e5e7eb;">
-                    <th style="padding: 10px; text-align: center; color: white; font-weight: 600;">
-                      <input 
-                        type="checkbox" 
-                        ${selectedWageIds.size === filteredWages.length && filteredWages.length > 0 ? 'checked' : ''}
-                        data-action="select-all-wages"
-                        style="cursor: pointer; width: 16px; height: 16px;"
-                      />
-                    </th>
-                    <th style="padding: 10px; text-align: left; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="employee_name" data-mode="manage">Employee ${manageSort.column === 'employee_name' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: center; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="wage_days" data-mode="manage">Days ${manageSort.column === 'wage_days' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="gross_salary" data-mode="manage">Gross ${manageSort.column === 'gross_salary' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="epf_deduction" data-mode="manage">EPF ${manageSort.column === 'epf_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="esic_deduction" data-mode="manage">ESIC ${manageSort.column === 'esic_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="other_deduction" data-mode="manage">Other Ded ${manageSort.column === 'other_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="other_benefit" data-mode="manage">Other Ben ${manageSort.column === 'other_benefit' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="net_salary" data-mode="manage">Net ${manageSort.column === 'net_salary' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: left; font-weight: 600; color: white;">Payment</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${sortArray(filteredWages, manageSort.column, manageSort.asc).map(wage => {
-                    const edited = editedWages[wage.id] || wage;
-                    const isEdited = !!editedWages[wage.id];
-                    const isSelected = selectedWageIds.has(wage.id);
-                    const netSalary = calculateNetSalary(
-                      edited.gross_salary,
-                      edited.epf_deduction,
-                      edited.esic_deduction,
-                      edited.other_deduction,
-                      edited.other_benefit
-                    );
-                    
-                    return `
-                      <tr style="
-                        border-bottom: 1px solid #e5e7eb;
-                        background: ${isSelected ? '#eff6ff' : (isEdited ? '#fef3c7' : 'white')};
-                      ">
-                        <td style="padding: 10px; text-align: center;">
-                          <input 
-                            type="checkbox" 
-                            ${isSelected ? 'checked' : ''}
-                            data-action="toggle-wage"
-                            data-wage-id="${wage.id}"
-                            style="cursor: pointer; width: 16px; height: 16px;"
-                          />
-                        </td>
-                        <td style="padding: 10px;">
-                          <div style="font-weight: 600; color: #1f2937;">${wage.employee_name}</div>
-                          <div style="font-size: 11px; color: #6b7280;">${wage.bank} - ${wage.account_no}</div>
-                        </td>
-                        <td style="padding: 10px; text-align: center;">
-                          <input 
-                            type="number" 
-                            value="${edited.wage_days}"
-                            data-action="edit-wage"
-                            data-wage-id="${wage.id}"
-                            data-field="wage_days"
-                            style="width: 50px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center;"
-                          />
-                        </td>
-                        <td style="padding: 10px; text-align: right;">
-                          <span style="font-weight: 500;">${formatCurrency(edited.gross_salary)}</span>
-                        </td>
-                        <td style="padding: 10px; text-align: right;">
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value="${edited.epf_deduction || 0}"
-                            data-action="edit-wage"
-                            data-wage-id="${wage.id}"
-                            data-field="epf_deduction"
-                            style="width: 70px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; text-align: right;"
-                          />
-                        </td>
-                        <td style="padding: 10px; text-align: right;">
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value="${edited.esic_deduction || 0}"
-                            data-action="edit-wage"
-                            data-wage-id="${wage.id}"
-                            data-field="esic_deduction"
-                            style="width: 70px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; text-align: right;"
-                          />
-                        </td>
-                        <td style="padding: 10px; text-align: right;">
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value="${edited.other_deduction || 0}"
-                            data-action="edit-wage"
-                            data-wage-id="${wage.id}"
-                            data-field="other_deduction"
-                            style="width: 70px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; text-align: right;"
-                          />
-                        </td>
-                        <td style="padding: 10px; text-align: right;">
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value="${edited.other_benefit || 0}"
-                            data-action="edit-wage"
-                            data-wage-id="${wage.id}"
-                            data-field="other_benefit"
-                            style="width: 70px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; text-align: right;"
-                          />
-                        </td>
-                        <td style="padding: 10px; text-align: right;">
-                          <span style="font-weight: 600; color: #059669;">${formatCurrency(netSalary)}</span>
-                        </td>
-                        <td style="padding: 10px;">
-                          <div style="font-size: 11px;">
-                            <div style="color: #6b7280;">${edited.paid_date ? formatDateDisplay(edited.paid_date) : 'Not paid'}</div>
-                            <div style="color: #6b7280;">${edited.cheque_no || '-'}</div>
-                          </div>
-                        </td>
-                      </tr>
-                    `;
-                  }).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ` : `
-          <div style="background: white; padding: 40px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
-            <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
-            <h3 style="color: #6b7280; margin-bottom: 8px;">No Wage Records Found</h3>
-            <p style="color: #9ca3af;">Select a month and click "Load Wages" to manage existing wage records</p>
-          </div>
-        `}
-      </div>
-    `;
-  }
 
   function attachEventDelegation(container) {
     if (!container) return;
@@ -1931,6 +1018,9 @@ function handleCreateFieldChange(empId, field, value) {
     const focusedWageId = activeElement?.dataset?.wageId;
     const focusedField = activeElement?.dataset?.field;
     const focusedEmpId = activeElement?.dataset?.empId;
+    const focusedSelectionStart = activeElement?.selectionStart;
+    const focusedSelectionEnd = activeElement?.selectionEnd;
+    const focusedSelectionDirection = activeElement?.selectionDirection;
 
     container.innerHTML = `
       <div style="padding: 20px; max-width: 1600px; margin: 0 auto;">
@@ -1939,9 +1029,43 @@ function handleCreateFieldChange(empId, field, value) {
           <p style="color: #6b7280; margin-top: 5px;">Create new wages or manage existing wage records</p>
         </div>
 
-        ${renderTabs()}
+        ${renderTabs({ activeTab })}
         
-        ${activeTab === 'create' ? renderCreateMode() : renderManageMode()}
+        ${activeTab === 'create' ? renderCreateMode({
+          selectedMonth,
+          employees,
+          wageData,
+          selectedEmployeeIds,
+          isLoading,
+          createFilters,
+          createSort,
+          commonPaymentData,
+          formatMonthDisplay,
+          formatCurrency,
+          calculateNetSalary,
+          getFilteredCreateEmployees,
+          getUniqueValues,
+          sortArray
+        }) : renderManageMode({
+          manageMonth,
+          existingWages,
+          editedWages,
+          selectedWageIds,
+          isManageLoading,
+          isBulkEditMode,
+          bulkEditData,
+          manageFilters,
+          manageSort,
+          formatMonthDisplay,
+          formatDateDisplay,
+          formatCurrency,
+          calculateNetSalary,
+          getFilteredManageWages,
+          getUniqueValues,
+          sortArray,
+          inputValue,
+          toNumber
+        })}
       </div>
     `;
     
@@ -1956,17 +1080,41 @@ function handleCreateFieldChange(empId, field, value) {
       const focusedInput = container.querySelector(`input[data-wage-id="${focusedWageId}"][data-field="${focusedField}"]`);
       if (focusedInput) {
         focusedInput.focus();
-        // Move cursor to end of input for smooth typing experience
-        const length = focusedInput.value.length;
-        focusedInput.setSelectionRange(length, length);
+        try {
+          if (focusedSelectionStart !== null && focusedSelectionStart !== undefined &&
+              focusedSelectionEnd !== null && focusedSelectionEnd !== undefined) {
+            focusedInput.setSelectionRange(
+              focusedSelectionStart,
+              focusedSelectionEnd,
+              focusedSelectionDirection || 'none'
+            );
+          } else {
+            const length = focusedInput.value.length;
+            focusedInput.setSelectionRange(length, length);
+          }
+        } catch (e) {
+          // Some input types don't support selection ranges
+        }
       }
     } else if (focusedEmpId && focusedField) {
       const focusedInput = container.querySelector(`input[data-emp-id="${focusedEmpId}"][data-field="${focusedField}"]`);
       if (focusedInput) {
         focusedInput.focus();
-        // Move cursor to end of input for smooth typing experience
-        const length = focusedInput.value.length;
-        focusedInput.setSelectionRange(length, length);
+        try {
+          if (focusedSelectionStart !== null && focusedSelectionStart !== undefined &&
+              focusedSelectionEnd !== null && focusedSelectionEnd !== undefined) {
+            focusedInput.setSelectionRange(
+              focusedSelectionStart,
+              focusedSelectionEnd,
+              focusedSelectionDirection || 'none'
+            );
+          } else {
+            const length = focusedInput.value.length;
+            focusedInput.setSelectionRange(length, length);
+          }
+        } catch (e) {
+          // Some input types don't support selection ranges
+        }
       }
     }
   }
