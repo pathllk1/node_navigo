@@ -60,8 +60,13 @@ export async function authenticateJWT(req, res, next) {
     }
 
     // Check if firm is still approved
-    if (user.firm_status !== 'approved') {
+    if (user.firm_id && user.firm_status !== 'approved') {
       return res.status(403).json({ error: "Firm access revoked" });
+    }
+
+    // Check if user is still approved
+    if (user.status !== 'approved') {
+      return res.status(403).json({ error: "User access revoked" });
     }
 
     // Check refresh token exists (hashed) in database

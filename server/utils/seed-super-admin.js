@@ -1,0 +1,57 @@
+import { db } from './db.js';
+import bcrypt from 'bcrypt';
+
+/**
+ * Seed Super Admin
+ * Creates a super admin user if one doesn't exist
+ * Super admin doesn't belong to any firm and can manage all firms
+ */
+
+async function seedSuperAdmin() {
+  try {
+    // Check if super admin already exists
+    const existingSuperAdmin = db.prepare(`
+      SELECT * FROM users WHERE role = 'super_admin'
+    `).get();
+
+    if (existingSuperAdmin) {
+      console.log('✅ Super admin already exists');
+      return;
+    }
+
+    // Create super admin
+    const password = 'SuperAdmin@123'; // Change this in production!
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const result = db.prepare(`
+      INSERT INTO users (username, email, fullname, password, role, firm_id, status)
+      VALUES (@username, @email, @fullname, @password, @role, @firm_id, @status)
+    `).run({
+      username: 'superadmin',
+      email: 'superadmin@system.com',
+      fullname: 'Super Administrator',
+      password: hashedPassword,
+      role: 'super_admin',
+      firm_id: null,
+      status: 'approved'
+    });
+
+    console.log('✅ Super admin created successfully');
+    console.log('📧 Email: superadmin@system.com');
+    console.log('🔑 Password: SuperAdmin@123');
+    console.log('⚠️  IMPORTANT: Change the password after first login!');
+
+  } catch (err) {
+    console.error('❌ Error seeding super admin:', err);
+  }
+}
+
+// Run if called directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  seedSuperAdmin().then(() => {
+    console.log('Done');
+    process.exit(0);
+  });
+}
+
+export { seedSuperAdmin };

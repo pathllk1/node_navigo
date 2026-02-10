@@ -1,4 +1,17 @@
-export function Layout(innerHtml) {
+export function Layout(innerHtml, currentUser = null) {
+  // Check if user is super admin
+  const isSuperAdmin = currentUser && currentUser.role === 'super_admin';
+  
+  // Debug logging
+  console.log('Layout rendering:', {
+    currentUser: currentUser ? {
+      username: currentUser.username,
+      role: currentUser.role,
+      firm_id: currentUser.firm_id
+    } : null,
+    isSuperAdmin
+  });
+  
   return `
     <!-- Top navbar -->
     <nav class="fixed top-0 left-0 w-full h-16 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-md flex items-center px-6 z-20">
@@ -19,6 +32,35 @@ export function Layout(innerHtml) {
             <span class="ml-3 sidebar-text">Home</span>
           </a>
         </li>
+        ${isSuperAdmin ? `
+        <li class="bg-gradient-to-r from-yellow-500 to-orange-500 rounded mx-2 my-1">
+          <a href="/admin" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-orange-600 rounded" data-tooltip="Admin Panel">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+</svg>
+            <span class="ml-3 sidebar-text font-bold">Admin Panel</span>
+          </a>
+        </li>
+        ` : ''}
+        ${currentUser && currentUser.firm_id ? `
+        <li>
+          <a href="/masterroll" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-purple-500 rounded" data-tooltip="Master Roll Dashboard">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
+</svg>
+            <span class="ml-3 sidebar-text">Master Roll</span>
+          </a>
+        </li>
+        <li>
+          <a href="/wages" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-purple-500 rounded" data-tooltip="Wages Management">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879-2.593c.379-.843.645-1.507.845-2.110.852-2.488.852-4.183 0-6.671-.2-.603-.466-1.267-.845-2.11-.379-.842-.645-1.507-.845-2.109C6.999 2.811 6.765 2 6 2c-.892 0-1.458.754-1.737 2.233-.098.559-.214 1.35-.214 2.267s.116 1.708.214 2.267c-.279 1.479-.845 2.233-1.737 2.233-.638 0-.884.646-.884 1.5s.246 1.5.884 1.5c.892 0 1.458.754 1.737 2.233.098.559.214 1.35.214 2.267s-.116 1.708-.214 2.267c-.279 1.479-.845 2.233-1.737 2.233-.638 0-.884.646-.884 1.5s.246 1.5.884 1.5c.765 0 .999-.811 1.243-2.182.2-.603.466-1.267.845-2.11.379-.842.645-1.507.845-2.109.852-2.488.852-4.183 0-6.671-.2-.603-.466-1.267-.845-2.11-.379-.843-.645-1.507-.845-2.109C6.999 10.811 6.765 10 6 10c-.892 0-1.458.754-1.737 2.233-.098.559-.214 1.35-.214 2.267s.116 1.708.214 2.267m15.738-9.268c.279-1.479.845-2.233 1.737-2.233.638 0 .884-.646.884-1.5s-.246-1.5-.884-1.5c-.765 0-.999.811-1.243 2.182-.2.603-.466 1.267-.845 2.11-.379.842-.645 1.507-.845 2.109-.852 2.488-.852 4.183 0 6.671.2.603.466 1.267.845 2.11.379.843.645 1.507.845 2.109.244 1.371.478 2.182 1.243 2.182.638 0 .884-.646.884-1.5s-.246-1.5-.884-1.5c-.892 0-1.458-.754-1.737-2.233-.098-.559-.214-1.35-.214-2.267s.116-1.708.214-2.267m0-4.534c.279-1.479.845-2.233 1.737-2.233.638 0 .884-.646.884-1.5s-.246-1.5-.884-1.5c-.765 0-.999.811-1.243 2.182-.2.603-.466 1.267-.845 2.11-.379.842-.645 1.507-.845 2.109-.852 2.488-.852 4.183 0 6.671.2.603.466 1.267.845 2.11.379.843.645 1.507.845 2.109.244 1.371.478 2.182 1.243 2.182.638 0 .884-.646.884-1.5s-.246-1.5-.884-1.5c-.892 0-1.458-.754-1.737-2.233-.098-.559-.214-1.35-.214-2.267s.116-1.708.214-2.267" />
+</svg>
+            <span class="ml-3 sidebar-text">Wages</span>
+          </a>
+        </li>
+        ` : ''}
         <li>
           <a href="/about" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-purple-500 rounded" data-tooltip="About">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
@@ -68,22 +110,16 @@ export function Layout(innerHtml) {
             <span class="ml-3 sidebar-text">Test</span>
           </a>
         </li>
+        ${currentUser ? `
         <li>
-          <a href="/masterroll" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-purple-500 rounded" data-tooltip="Master Roll Dashboard">
+          <button id="logout-btn" class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-red-500 rounded w-full text-left" data-tooltip="Logout">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-  <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
+  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
 </svg>
-            <span class="ml-3 sidebar-text">Master Roll Dashboard</span>
-          </a>
+            <span class="ml-3 sidebar-text">Logout</span>
+          </button>
         </li>
-        <li>
-          <a href="/wages" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-purple-500 rounded" data-tooltip="Wages Management">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879-2.593c.379-.843.645-1.507.845-2.110.852-2.488.852-4.183 0-6.671-.2-.603-.466-1.267-.845-2.11-.379-.842-.645-1.507-.845-2.109C6.999 2.811 6.765 2 6 2c-.892 0-1.458.754-1.737 2.233-.098.559-.214 1.35-.214 2.267s.116 1.708.214 2.267c-.279 1.479-.845 2.233-1.737 2.233-.638 0-.884.646-.884 1.5s.246 1.5.884 1.5c.892 0 1.458.754 1.737 2.233.098.559.214 1.35.214 2.267s-.116 1.708-.214 2.267c-.279 1.479-.845 2.233-1.737 2.233-.638 0-.884.646-.884 1.5s.246 1.5.884 1.5c.765 0 .999-.811 1.243-2.182.2-.603.466-1.267.845-2.11.379-.842.645-1.507.845-2.109.852-2.488.852-4.183 0-6.671-.2-.603-.466-1.267-.845-2.11-.379-.843-.645-1.507-.845-2.109C6.999 10.811 6.765 10 6 10c-.892 0-1.458.754-1.737 2.233-.098.559-.214 1.35-.214 2.267s.116 1.708.214 2.267m15.738-9.268c.279-1.479.845-2.233 1.737-2.233.638 0 .884-.646.884-1.5s-.246-1.5-.884-1.5c-.765 0-.999.811-1.243 2.182-.2.603-.466 1.267-.845 2.11-.379.842-.645 1.507-.845 2.109-.852 2.488-.852 4.183 0 6.671.2.603.466 1.267.845 2.11.379.843.645 1.507.845 2.109.244 1.371.478 2.182 1.243 2.182.638 0 .884-.646.884-1.5s-.246-1.5-.884-1.5c-.892 0-1.458-.754-1.737-2.233-.098-.559-.214-1.35-.214-2.267s.116-1.708.214-2.267m0-4.534c.279-1.479.845-2.233 1.737-2.233.638 0 .884-.646.884-1.5s-.246-1.5-.884-1.5c-.765 0-.999.811-1.243 2.182-.2.603-.466 1.267-.845 2.11-.379.842-.645 1.507-.845 2.109-.852 2.488-.852 4.183 0 6.671.2.603.466 1.267.845 2.11.379.843.645 1.507.845 2.109.244 1.371.478 2.182 1.243 2.182.638 0 .884-.646.884-1.5s-.246-1.5-.884-1.5c-.892 0-1.458-.754-1.737-2.233-.098-.559-.214-1.35-.214-2.267s.116-1.708.214-2.267" />
-</svg>
-            <span class="ml-3 sidebar-text">Wages Management</span>
-          </a>
-        </li>
+        ` : ''}
       </ul>
 
 

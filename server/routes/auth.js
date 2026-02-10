@@ -16,29 +16,38 @@ const router = express.Router();
 -------------------------------------------------- */
 
 const getUserByEmail = db.prepare(`
-  SELECT u.*, f.name as firm_name, f.code as firm_code, f.status as firm_status
+  SELECT u.*, 
+         CASE WHEN u.firm_id IS NOT NULL THEN f.name ELSE NULL END as firm_name,
+         CASE WHEN u.firm_id IS NOT NULL THEN f.code ELSE NULL END as firm_code,
+         CASE WHEN u.firm_id IS NOT NULL THEN f.status ELSE NULL END as firm_status
   FROM users u
-  JOIN firms f ON f.id = u.firm_id
+  LEFT JOIN firms f ON f.id = u.firm_id
   WHERE u.email = ?
 `);
 
 const getUserById = db.prepare(`
-  SELECT u.*, f.name as firm_name, f.code as firm_code, f.status as firm_status
+  SELECT u.*, 
+         CASE WHEN u.firm_id IS NOT NULL THEN f.name ELSE NULL END as firm_name,
+         CASE WHEN u.firm_id IS NOT NULL THEN f.code ELSE NULL END as firm_code,
+         CASE WHEN u.firm_id IS NOT NULL THEN f.status ELSE NULL END as firm_status
   FROM users u
-  JOIN firms f ON f.id = u.firm_id
+  LEFT JOIN firms f ON f.id = u.firm_id
   WHERE u.id = ?
 `);
 
 const getUserByUsername = db.prepare(`
-  SELECT u.*, f.name as firm_name, f.code as firm_code, f.status as firm_status
+  SELECT u.*, 
+         CASE WHEN u.firm_id IS NOT NULL THEN f.name ELSE NULL END as firm_name,
+         CASE WHEN u.firm_id IS NOT NULL THEN f.code ELSE NULL END as firm_code,
+         CASE WHEN u.firm_id IS NOT NULL THEN f.status ELSE NULL END as firm_status
   FROM users u
-  JOIN firms f ON f.id = u.firm_id
+  LEFT JOIN firms f ON f.id = u.firm_id
   WHERE u.username = ?
 `);
 
 const createUser = db.prepare(`
-  INSERT INTO users (username, email, fullname, password, role, firm_id)
-  VALUES (@username, @email, @fullname, @password, @role, @firm_id)
+  INSERT INTO users (username, email, fullname, password, role, firm_id, status)
+  VALUES (@username, @email, @fullname, @password, @role, @firm_id, @status)
 `);
 
 const createFirm = db.prepare(`
@@ -51,11 +60,13 @@ const getFirmByCode = db.prepare(`
 `);
 
 const getAllUsers = db.prepare(`
-  SELECT u.id, u.username, u.email, u.fullname, u.role, 
+  SELECT u.id, u.username, u.email, u.fullname, u.role, u.status,
          u.created_at, u.updated_at,
-         f.name as firm_name, f.code as firm_code
+         CASE WHEN u.firm_id IS NOT NULL THEN f.name ELSE 'No Firm' END as firm_name,
+         CASE WHEN u.firm_id IS NOT NULL THEN f.code ELSE NULL END as firm_code
   FROM users u
-  JOIN firms f ON f.id = u.firm_id
+  LEFT JOIN firms f ON f.id = u.firm_id
+  WHERE u.role != 'super_admin'
   ORDER BY u.created_at DESC
 `);
 
@@ -101,103 +112,10 @@ const deleteAllUserRefreshTokens = db.prepare(`
    ROUTES
 -------------------------------------------------- */
 
-// ---------------- Register Firm ----------------
-router.post("/auth/register-firm", async (req, res) => {
-  try {
-    const { firmName, firmCode, adminName, adminEmail, adminUsername, adminPassword } = req.body;
-
-    // Validation
-    if (!firmName || !firmCode || !adminName || !adminEmail || !adminUsername || !adminPassword) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "All fields are required" 
-      });
-    }
-
-    // Check if firm code already exists
-    const existingFirm = getFirmByCode.get(firmCode);
-    if (existingFirm) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Firm code already exists" 
-      });
-    }
-
-    // Check if email or username already exists
-    const existingEmail = getUserByEmail.get(adminEmail);
-    const existingUsername = getUserByUsername.get(adminUsername);
-    
-    if (existingEmail) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Email already registered" 
-      });
-    }
-
-    if (existingUsername) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Username already taken" 
-      });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(adminPassword, 12);
-
-    // Create firm and admin user in a transaction
-    const result = db.transaction(() => {
-      // Create firm (default status: pending for approval)
-      const firmResult = createFirm.run({
-        name: firmName,
-        code: firmCode.toUpperCase(),
-        description: null,
-        status: 'pending'
-      });
-
-      // Create admin user
-      const userResult = createUser.run({
-        username: adminUsername,
-        email: adminEmail,
-        fullname: adminName,
-        password: hashedPassword,
-        role: 'admin',
-        firm_id: firmResult.lastInsertRowid
-      });
-
-      return {
-        firmId: firmResult.lastInsertRowid,
-        userId: userResult.lastInsertRowid
-      };
-    })();
-
-    res.status(201).json({
-      success: true,
-      message: "Firm registered successfully. Awaiting approval.",
-      firm: {
-        id: result.firmId,
-        code: firmCode.toUpperCase()
-      },
-      user: {
-        id: result.userId,
-        username: adminUsername,
-        email: adminEmail,
-        fullname: adminName
-      }
-    });
-
-  } catch (err) {
-    console.error("Register firm error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: "Failed to register firm" 
-    });
-  }
-});
-
-// ---------------- Register User (under existing firm) ----------------
+// ---------------- Register User (Public - Requires Admin Approval) ----------------
 router.post("/auth/register", async (req, res) => {
   try {
-    const { firmCode, username, email, fullname, password, role = 'user' } = req.body;
+    const { firmCode, username, email, fullname, password } = req.body;
 
     // Validation
     if (!firmCode || !username || !email || !fullname || !password) {
@@ -244,27 +162,28 @@ router.post("/auth/register", async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user
+    // Create user with pending status (requires admin approval)
     const result = createUser.run({
       username,
       email,
       fullname,
       password: hashedPassword,
-      role,
-      firm_id: firm.id
+      role: 'user',
+      firm_id: firm.id,
+      status: 'pending'
     });
 
     res.status(201).json({
       success: true,
-      message: "User registered successfully",
+      message: "Registration successful! Your account is pending approval by an administrator.",
       user: {
         id: result.lastInsertRowid,
         username,
         email,
         fullname,
-        role,
         firm_name: firm.name,
-        firm_code: firm.code
+        firm_code: firm.code,
+        status: 'pending'
       }
     });
 
@@ -282,6 +201,8 @@ router.post("/auth/login", async (req, res) => {
   try {
     const { emailOrUsername, password } = req.body;
 
+    console.log(`🔐 Login attempt: ${emailOrUsername}`);
+
     if (!emailOrUsername || !password) {
       return res.status(400).json({ 
         success: false, 
@@ -296,28 +217,44 @@ router.post("/auth/login", async (req, res) => {
     }
 
     if (!user) {
+      console.log(`❌ User not found: ${emailOrUsername}`);
       return res.status(401).json({ 
         success: false, 
         error: "Invalid credentials" 
       });
     }
 
+    console.log(`✅ User found: ${user.username} (role: ${user.role}, status: ${user.status})`);
+
     // Check if firm is approved
-    if (user.firm_status !== 'approved') {
+    if (user.firm_id && user.firm_status !== 'approved') {
+      console.log(`❌ Firm not approved: ${user.firm_status}`);
       return res.status(403).json({ 
         success: false, 
         error: "Your firm is not approved yet. Please contact support." 
       });
     }
 
+    // Check if user is approved
+    if (user.status !== 'approved') {
+      console.log(`❌ User not approved: ${user.status}`);
+      return res.status(403).json({ 
+        success: false, 
+        error: "Your account is pending approval. Please contact your administrator." 
+      });
+    }
+
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      console.log(`❌ Password mismatch`);
       return res.status(401).json({ 
         success: false, 
         error: "Invalid credentials" 
       });
     }
+
+    console.log(`✅ Password verified`);
 
     User.updateLastLogin.run(user.id);
     
@@ -410,10 +347,18 @@ router.post("/auth/refresh", async (req, res) => {
     }
 
     // Check if firm is still approved
-    if (user.firm_status !== 'approved') {
+    if (user.firm_id && user.firm_status !== 'approved') {
       return res.status(403).json({ 
         success: false, 
         error: "Firm access revoked" 
+      });
+    }
+
+    // Check if user is still approved
+    if (user.status !== 'approved') {
+      return res.status(403).json({ 
+        success: false, 
+        error: "User access revoked" 
       });
     }
 
@@ -487,11 +432,11 @@ router.post("/auth/logout", authenticateJWT, async (req, res) => {
   }
 });
 
-// ---------------- Get All Users (Admin only) ----------------
+// ---------------- Get All Users (Admin/Super Admin only) ----------------
 router.get("/users", authenticateJWT, (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
+    // Check if user is admin or super_admin
+    if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
       return res.status(403).json({ 
         success: false, 
         error: "Access denied" 

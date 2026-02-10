@@ -20,6 +20,52 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 /* --------------------------------------------------
+   SCHEMA MIGRATION - Make firm_id nullable
+-------------------------------------------------- */
+
+try {
+  // Check if users table exists and has NOT NULL constraint on firm_id
+  const tableInfo = db.prepare("PRAGMA table_info(users)").all();
+  const firmIdColumn = tableInfo.find(col => col.name === 'firm_id');
+  
+  if (firmIdColumn && firmIdColumn.notnull === 1) {
+    // Need to migrate - firm_id is NOT NULL, need to make it nullable
+    console.log('🔄 Migrating users table to make firm_id nullable...');
+    
+    db.exec(`
+      BEGIN TRANSACTION;
+      
+      ALTER TABLE users RENAME TO users_backup;
+      
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL UNIQUE,
+        fullname TEXT NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT CHECK(role IN ('user','manager','admin','super_admin')) DEFAULT 'user',
+        firm_id INTEGER,
+        status TEXT CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
+        last_mail_sent TEXT,
+        last_login TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE
+      ) STRICT;
+      
+      INSERT INTO users SELECT * FROM users_backup;
+      DROP TABLE users_backup;
+      
+      COMMIT;
+    `);
+    
+    console.log('✅ Migration complete - firm_id is now nullable');
+  }
+} catch (err) {
+  console.log('ℹ️  Schema migration skipped (table may already be correct)');
+}
+
+/* --------------------------------------------------
    SCHEMA - WITH MULTI-FIRM SUPPORT
 -------------------------------------------------- */
 
@@ -42,8 +88,9 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   fullname TEXT NOT NULL,
   password TEXT NOT NULL,
-  role TEXT CHECK(role IN ('user','manager','admin')) DEFAULT 'user',
-  firm_id INTEGER NOT NULL,
+  role TEXT CHECK(role IN ('user','manager','admin','super_admin')) DEFAULT 'user',
+  firm_id INTEGER,
+  status TEXT CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
   last_mail_sent TEXT,
   last_login TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -223,6 +270,9 @@ function addColumnIfNotExists(table, columnDef) {
   }
 }
 
+/* ---- users missing columns ---- */
+addColumnIfNotExists('users', "status TEXT CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending'");
+
 /* ---- master_rolls missing columns ---- */
 addColumnIfNotExists('master_rolls', 'branch TEXT');
 addColumnIfNotExists('master_rolls', 'created_by INTEGER');
@@ -265,28 +315,37 @@ export const Firm = {
 /* ---------- USER ---------- */
 export const User = {
   create: db.prepare(`
-    INSERT INTO users (username, email, fullname, password, role, firm_id)
-    VALUES (@username, @email, @fullname, @password, @role, @firm_id)
+    INSERT INTO users (username, email, fullname, password, role, firm_id, status)
+    VALUES (@username, @email, @fullname, @password, @role, @firm_id, @status)
   `),
 
   getById: db.prepare(`
-    SELECT u.*, f.name as firm_name, f.code as firm_code, f.status as firm_status
+    SELECT u.*, 
+           CASE WHEN u.firm_id IS NOT NULL THEN f.name ELSE NULL END as firm_name,
+           CASE WHEN u.firm_id IS NOT NULL THEN f.code ELSE NULL END as firm_code,
+           CASE WHEN u.firm_id IS NOT NULL THEN f.status ELSE NULL END as firm_status
     FROM users u
-    JOIN firms f ON f.id = u.firm_id
+    LEFT JOIN firms f ON f.id = u.firm_id
     WHERE u.id = ?
   `),
 
   getByEmail: db.prepare(`
-    SELECT u.*, f.name as firm_name, f.code as firm_code, f.status as firm_status
+    SELECT u.*, 
+           CASE WHEN u.firm_id IS NOT NULL THEN f.name ELSE NULL END as firm_name,
+           CASE WHEN u.firm_id IS NOT NULL THEN f.code ELSE NULL END as firm_code,
+           CASE WHEN u.firm_id IS NOT NULL THEN f.status ELSE NULL END as firm_status
     FROM users u
-    JOIN firms f ON f.id = u.firm_id
+    LEFT JOIN firms f ON f.id = u.firm_id
     WHERE u.email = ?
   `),
 
   getByUsername: db.prepare(`
-    SELECT u.*, f.name as firm_name, f.code as firm_code, f.status as firm_status
+    SELECT u.*, 
+           CASE WHEN u.firm_id IS NOT NULL THEN f.name ELSE NULL END as firm_name,
+           CASE WHEN u.firm_id IS NOT NULL THEN f.code ELSE NULL END as firm_code,
+           CASE WHEN u.firm_id IS NOT NULL THEN f.status ELSE NULL END as firm_status
     FROM users u
-    JOIN firms f ON f.id = u.firm_id
+    LEFT JOIN firms f ON f.id = u.firm_id
     WHERE u.username = ?
   `),
 
@@ -294,6 +353,22 @@ export const User = {
     UPDATE users 
     SET last_login = datetime('now') 
     WHERE id = ?
+  `),
+
+  updateStatus: db.prepare(`
+    UPDATE users 
+    SET status = @status, updated_at = datetime('now')
+    WHERE id = @id
+  `),
+
+  getAllPending: db.prepare(`
+    SELECT u.*, 
+           CASE WHEN u.firm_id IS NOT NULL THEN f.name ELSE NULL END as firm_name,
+           CASE WHEN u.firm_id IS NOT NULL THEN f.code ELSE NULL END as firm_code
+    FROM users u
+    LEFT JOIN firms f ON f.id = u.firm_id
+    WHERE u.status = 'pending'
+    ORDER BY u.created_at DESC
   `)
 };
 
@@ -515,3 +590,8 @@ export const Relations = {
 };
 
 console.log('✅ Database initialized with multi-firm support and payment tracking');
+
+// Seed super admin on initialization
+import('./seed-super-admin.js').then(module => {
+  module.seedSuperAdmin();
+});

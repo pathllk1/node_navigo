@@ -1,9 +1,9 @@
-
 import { HomePage } from "./pages/home.js";
 import { AboutPage } from "./pages/about.js";
 import { ContactPage } from "./pages/contact.js";
 import { ServicesPage } from "./pages/services.js";
 import { AuthPage } from "./pages/AuthPage.js";
+import { AdminPanel } from "./pages/AdminPanel.js";
 import { ServerInfoPage } from "./pages/server-info.js";
 import { TstPage } from "./pages/tst.js";
 import {MasterRollDashboard} from "./pages/MasterRollDashboard.js";
@@ -25,7 +25,12 @@ if (savedUser) currentUser = JSON.parse(savedUser);
 // ---------------- Auth Success ----------------
 function handleAuthSuccess(user) {
   currentUser = user;
-  router.navigate("/");
+  // Re-render the auth page to show logged-in state
+  renderPage(AuthPage(handleAuthSuccess));
+  // Then navigate to home after a brief delay
+  setTimeout(() => {
+    router.navigate("/");
+  }, 500);
 }
 
 // ---------------- Logout ----------------
@@ -45,7 +50,7 @@ function renderSidebar() {
 
 // ---------------- Render Pages ----------------
 function renderPage(page) {
-  root.innerHTML = Layout(page.html);
+  root.innerHTML = Layout(page.html, currentUser);
   router.updatePageLinks();
   renderSidebar();
   startAccessTokenTimer();
@@ -60,6 +65,14 @@ router
   .on("/services", () => renderPage(ServicesPage()))
   .on("/server-info", () => renderPage(ServerInfoPage()))
   .on("/auth", () => renderPage(AuthPage(handleAuthSuccess)))
+  .on("/admin", () => {
+    // Check if user is super_admin
+    if (currentUser && currentUser.role === 'super_admin') {
+      renderPage(AdminPanel());
+    } else {
+      renderPage({ html: "<h1>403 - Access Denied</h1><p>Only super admins can access this page.</p>", scripts: () => {} });
+    }
+  })
   .on("/masterroll", () => renderPage(MasterRollDashboard()))
   .on("/wages", () => renderPage({ html: '<div id="wages-dashboard"></div>', scripts: () => WagesDashboard() }))
   .on("/tst", () => renderPage(TstPage()))
