@@ -10,6 +10,16 @@ import adminRoutes from "./routes/admin.js";
 import tstRoutes from "./routes/tst.js";
 import masterRollRoutes from './routes/masterRoll.routes.js';
 import wagesRoutes from './routes/wages.routes.js';
+import partiesRoutes from './routes/parties.routes.js';
+import stocksRoutes from './routes/stocks.routes.js';
+import salesRoutes from './routes/sales.routes.js';
+import purchaseRoutes from './routes/purchase.routes.js';
+import ledgerRoutes from './routes/ledger.routes.js';
+import vouchersRoutes from './routes/vouchers.routes.js';
+import bankingRoutes from './routes/banking.routes.js';
+import reportsRoutes from './routes/reports.routes.js';
+import notesRoutes from './routes/notes.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
 import { authenticateJWT } from "./middleware/auth.js";
 
 
@@ -61,6 +71,16 @@ app.use("/admin", adminRoutes);
 app.use("/tst", authenticateJWT, tstRoutes);
 app.use('/api/master-rolls', authenticateJWT, masterRollRoutes);
 app.use('/api/wages', authenticateJWT, wagesRoutes);
+app.use('/api/parties', authenticateJWT, partiesRoutes);
+app.use('/api/stocks', authenticateJWT, stocksRoutes);
+app.use('/api/sales', authenticateJWT, salesRoutes);
+app.use('/api/purchase', authenticateJWT, purchaseRoutes);
+app.use('/api/ledger', authenticateJWT, ledgerRoutes);
+app.use('/api/vouchers', authenticateJWT, vouchersRoutes);
+app.use('/api/banking', authenticateJWT, bankingRoutes);
+app.use('/api/reports', authenticateJWT, reportsRoutes);
+app.use('/api/notes', authenticateJWT, notesRoutes);
+app.use('/api/settings', authenticateJWT, settingsRoutes);
 
 // SPA fallback for all other routes
 app.get(/.*/, (req, res) => {
