@@ -207,6 +207,10 @@ temp/
 *.sqlite3
 *.db-shm
 *.db-wal
+*.sqlite-shm
+*.sqlite-wal
+data.sqlite-shm
+data.sqlite-wal
 
 # OS generated files
 Thumbs.db
@@ -240,3 +244,5 @@ generated/
 generated/
 .vercel
 .env*.local
+server/data.sqlite-shm
+server/data.sqlite-wal

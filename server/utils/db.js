@@ -148,8 +148,6 @@ CREATE TABLE IF NOT EXISTS user_wages (
    INDEXES FOR PERFORMANCE
 -------------------------------------------------- */
 
-
-
 // Create indexes if they don't exist
 db.exec(`
   -- Unique index on aadhar per firm (employee can't be duplicated within a firm)
@@ -203,12 +201,46 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_master_rolls_site 
   ON master_rolls(site);
+
+  -- Index on payment tracking fields
+  CREATE INDEX IF NOT EXISTS idx_wages_paid_date 
+  ON wages(paid_date);
 `);
 
 
 /* --------------------------------------------------
    PREPARED STATEMENTS (UTILS)
 -------------------------------------------------- */
+
+function addColumnIfNotExists(table, columnDef) {
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
+    console.log(`✅ Added column: ${table}.${columnDef}`);
+  } catch (err) {
+    if (!err.message.includes('duplicate column name')) {
+      throw err;
+    }
+  }
+}
+
+/* ---- master_rolls missing columns ---- */
+addColumnIfNotExists('master_rolls', 'branch TEXT');
+addColumnIfNotExists('master_rolls', 'created_by INTEGER');
+addColumnIfNotExists('master_rolls', 'updated_by INTEGER');
+addColumnIfNotExists('master_rolls', "status TEXT DEFAULT 'Active'");
+
+/* ---- wages missing columns ---- */
+addColumnIfNotExists('wages', 'project TEXT');
+addColumnIfNotExists('wages', 'site TEXT');
+addColumnIfNotExists('wages', 'epf_deduction REAL');
+addColumnIfNotExists('wages', 'esic_deduction REAL');
+addColumnIfNotExists('wages', 'other_deduction REAL');
+addColumnIfNotExists('wages', 'other_benefit REAL');
+addColumnIfNotExists('wages', 'paid_date TEXT');
+addColumnIfNotExists('wages', 'cheque_no TEXT');
+addColumnIfNotExists('wages', 'paid_from_bank_ac TEXT');
+addColumnIfNotExists('wages', 'created_by INTEGER DEFAULT 1');
+addColumnIfNotExists('wages', 'updated_by INTEGER DEFAULT 1');
 
 /* ---------- FIRM ---------- */
 export const Firm = {
@@ -360,7 +392,12 @@ export const Wage = {
       epf_deduction,
       esic_deduction,
       other_deduction,
-      other_benefit
+      other_benefit,
+      paid_date,
+      cheque_no,
+      paid_from_bank_ac,
+      created_by,
+      updated_by
     ) VALUES (
       @firm_id,
       @master_roll_id,
@@ -372,7 +409,12 @@ export const Wage = {
       @epf_deduction,
       @esic_deduction,
       @other_deduction,
-      @other_benefit
+      @other_benefit,
+      @paid_date,
+      @cheque_no,
+      @paid_from_bank_ac,
+      @created_by,
+      @updated_by
     )
   `),
 
@@ -417,8 +459,12 @@ export const Wage = {
       other_deduction = @other_deduction,
       other_benefit = @other_benefit,
       net_salary = @net_salary,
+      paid_date = @paid_date,
+      cheque_no = @cheque_no,
+      paid_from_bank_ac = @paid_from_bank_ac,
+      updated_by = @updated_by,
       updated_at = datetime('now')
-    WHERE id = ? AND firm_id = ?
+    WHERE id = @id AND firm_id = @firm_id
   `),
 
   delete: db.prepare(`
@@ -468,4 +514,4 @@ export const Relations = {
   `)
 };
 
-console.log('✅ Database initialized with multi-firm support');
+console.log('✅ Database initialized with multi-firm support and payment tracking');
