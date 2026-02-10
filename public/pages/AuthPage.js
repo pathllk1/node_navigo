@@ -65,7 +65,7 @@ export function AuthPage(onAuthSuccess) {
     // No user → show login/register forms
     html = `
       <div class="flex items-center justify-center min-h-[calc(100vh-4rem)] py-6">
-        <div class="w-full max-w-md p-6 bg-white rounded-xl shadow-lg">
+        <div class="w-full max-w-4xl p-6 bg-white rounded-xl shadow-lg">
           <!-- Tabs -->
           <div class="flex justify-center mb-6 border-b-2 border-gray-200">
             <button id="tab-login" class="tab-btn px-4 py-2 text-purple-700 border-b-2 border-purple-700 font-semibold focus:outline-none">Login</button>

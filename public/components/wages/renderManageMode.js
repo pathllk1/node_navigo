@@ -256,6 +256,17 @@ export function renderManageMode(ctx) {
                     />
                   </div>
                   <div>
+                    <label style="display: block; margin-bottom: 3px; font-size: 12px; color: #78350f;">Paid From Bank</label>
+                    <input 
+                      type="text"
+                      value="${bulkEditData.paid_from_bank_ac || ''}"
+                      data-action="set-bulk-edit"
+                      data-field="paid_from_bank_ac"
+                      placeholder="Leave blank to skip"
+                      style="width: 100%; padding: 5px 8px; border: 1px solid #d97706; border-radius: 4px; font-size: 12px;"
+                    />
+                  </div>
+                  <div>
                     <label style="display: block; margin-bottom: 3px; font-size: 12px; color: #78350f;">Remarks</label>
                     <input 
                       type="text"
@@ -320,7 +331,7 @@ export function renderManageMode(ctx) {
                 
                 <div>
                   <select 
-                    data-action="set-filter"
+                    data-action="filter-select"
                     data-mode="manage"
                     data-field="bankFilter"
                     style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
@@ -332,7 +343,7 @@ export function renderManageMode(ctx) {
                 
                 <div>
                   <select 
-                    data-action="set-filter"
+                    data-action="filter-select"
                     data-mode="manage"
                     data-field="projectFilter"
                     style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
@@ -344,7 +355,7 @@ export function renderManageMode(ctx) {
                 
                 <div>
                   <select 
-                    data-action="set-filter"
+                    data-action="filter-select"
                     data-mode="manage"
                     data-field="siteFilter"
                     style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
@@ -356,7 +367,7 @@ export function renderManageMode(ctx) {
                 
                 <div>
                   <select 
-                    data-action="set-filter"
+                    data-action="filter-select"
                     data-mode="manage"
                     data-field="paidFilter"
                     style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
@@ -394,14 +405,14 @@ export function renderManageMode(ctx) {
                         style="cursor: pointer; width: 16px; height: 16px;"
                       />
                     </th>
-                    <th style="padding: 10px; text-align: left; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="employee_name" data-mode="manage">Employee ${manageSort.column === 'employee_name' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: center; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="wage_days" data-mode="manage">Days ${manageSort.column === 'wage_days' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="gross_salary" data-mode="manage">Gross ${manageSort.column === 'gross_salary' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="epf_deduction" data-mode="manage">EPF ${manageSort.column === 'epf_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="esic_deduction" data-mode="manage">ESIC ${manageSort.column === 'esic_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="other_deduction" data-mode="manage">Other Ded ${manageSort.column === 'other_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="other_benefit" data-mode="manage">Other Ben ${manageSort.column === 'other_benefit' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="net_salary" data-mode="manage">Net ${manageSort.column === 'net_salary' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 10px; text-align: left; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="employee_name" data-mode="manage">Employee ${manageSort.column === 'employee_name' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 10px; text-align: center; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="wage_days" data-mode="manage">Days ${manageSort.column === 'wage_days' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="gross_salary" data-mode="manage">Gross ${manageSort.column === 'gross_salary' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="epf_deduction" data-mode="manage">EPF ${manageSort.column === 'epf_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="esic_deduction" data-mode="manage">ESIC ${manageSort.column === 'esic_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="other_deduction" data-mode="manage">Other Ded ${manageSort.column === 'other_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="other_benefit" data-mode="manage">Other Ben ${manageSort.column === 'other_benefit' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="net_salary" data-mode="manage">Net ${manageSort.column === 'net_salary' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
                     <th style="padding: 10px; text-align: left; font-weight: 600; color: white;">Payment</th>
                   </tr>
                 </thead>

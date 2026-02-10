@@ -35,14 +35,16 @@ export function WagesDashboard() {
     other_benefit: '',
     paid_date: '',
     cheque_no: '',
-    paid_from_bank_ac: ''
+    paid_from_bank_ac: '',
+    remarks: ''
   };
   
   // Common payment fields (Create mode)
   let commonPaymentData = {
     paid_date: '',
     cheque_no: '',
-    paid_from_bank_ac: ''
+    paid_from_bank_ac: '',
+    remarks: ''
   };
   
   // Filter state (for both Create and Manage)
@@ -57,7 +59,8 @@ export function WagesDashboard() {
     searchTerm: '',
     bankFilter: 'all',
     projectFilter: 'all',
-    siteFilter: 'all'
+    siteFilter: 'all',
+    paidFilter: 'all'
   };
 
   // Debounce timers for search filters
@@ -585,6 +588,10 @@ function handleCreateFieldChange(empId, field, value) {
       if (bulkEditData.paid_from_bank_ac !== '') {
         editedWages[wageId].paid_from_bank_ac = bulkEditData.paid_from_bank_ac;
       }
+
+      if (bulkEditData.remarks !== '') {
+        editedWages[wageId].remarks = bulkEditData.remarks;
+      }
     });
 
     // Clear bulk edit data
@@ -596,7 +603,8 @@ function handleCreateFieldChange(empId, field, value) {
       other_benefit: '',
       paid_date: '',
       cheque_no: '',
-      paid_from_bank_ac: ''
+      paid_from_bank_ac: '',
+      remarks: ''
     };
 
     isBulkEditMode = false;
@@ -793,7 +801,12 @@ function handleCreateFieldChange(empId, field, value) {
       const siteMatch = manageFilters.siteFilter === 'all' || 
         wage.site === manageFilters.siteFilter;
 
-      return searchMatch && bankMatch && projectMatch && siteMatch;
+      // Paid filter
+      const paidMatch = manageFilters.paidFilter === 'all' ||
+        (manageFilters.paidFilter === 'paid' && wage.paid_date) ||
+        (manageFilters.paidFilter === 'unpaid' && !wage.paid_date);
+
+      return searchMatch && bankMatch && projectMatch && siteMatch && paidMatch;
     });
   }
 
@@ -1234,7 +1247,8 @@ function handleCreateFieldChange(empId, field, value) {
         searchTerm: '',
         bankFilter: 'all',
         projectFilter: 'all',
-        siteFilter: 'all'
+        siteFilter: 'all',
+        paidFilter: 'all'
       };
       selectedWageIds.clear();
       render();
@@ -1263,7 +1277,8 @@ function handleCreateFieldChange(empId, field, value) {
           other_benefit: '',
           paid_date: '',
           cheque_no: '',
-          paid_from_bank_ac: ''
+          paid_from_bank_ac: '',
+          remarks: ''
         };
       }
       render();

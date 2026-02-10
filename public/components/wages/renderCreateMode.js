@@ -128,7 +128,7 @@ export function renderCreateMode(ctx) {
                 
                 <div>
                   <select 
-                    data-action="set-filter"
+                    data-action="filter-select"
                     data-mode="create"
                     data-field="bankFilter"
                     style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
@@ -140,7 +140,7 @@ export function renderCreateMode(ctx) {
                 
                 <div>
                   <select 
-                    data-action="set-filter"
+                    data-action="filter-select"
                     data-mode="create"
                     data-field="projectFilter"
                     style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
@@ -152,7 +152,7 @@ export function renderCreateMode(ctx) {
                 
                 <div>
                   <select 
-                    data-action="set-filter"
+                    data-action="filter-select"
                     data-mode="create"
                     data-field="siteFilter"
                     style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
@@ -173,7 +173,7 @@ export function renderCreateMode(ctx) {
                   <input 
                     type="date" 
                     value="${commonPaymentData.paid_date}"
-                    data-action="set-common-payment"
+                    data-action="common-payment"
                     data-field="paid_date"
                     style="width: 100%; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;"
                   />
@@ -183,8 +183,19 @@ export function renderCreateMode(ctx) {
                   <input 
                     type="text" 
                     value="${commonPaymentData.cheque_no}"
-                    data-action="set-common-payment"
+                    data-action="common-payment"
                     data-field="cheque_no"
+                    placeholder="Optional"
+                    style="width: 100%; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;"
+                  />
+                </div>
+                <div>
+                  <label style="display: block; margin-bottom: 3px; font-size: 12px; color: #6b7280;">Paid From Bank</label>
+                  <input 
+                    type="text" 
+                    value="${commonPaymentData.paid_from_bank_ac}"
+                    data-action="common-payment"
+                    data-field="paid_from_bank_ac"
                     placeholder="Optional"
                     style="width: 100%; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;"
                   />
@@ -194,7 +205,7 @@ export function renderCreateMode(ctx) {
                   <input 
                     type="text" 
                     value="${commonPaymentData.remarks}"
-                    data-action="set-common-payment"
+                    data-action="common-payment"
                     data-field="remarks"
                     placeholder="Optional"
                     style="width: 100%; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;"
@@ -258,16 +269,16 @@ export function renderCreateMode(ctx) {
                         style="cursor: pointer; width: 16px; height: 16px;"
                       />
                     </th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="employee_name" data-mode="create">Employee ${createSort.column === 'employee_name' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="employee_name" data-mode="create">Employee ${createSort.column === 'employee_name' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
                     <th style="padding: 12px; text-align: left; font-weight: 600; color: white;">Bank Details</th>
-                    <th style="padding: 12px; text-align: center; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="p_day_wage" data-mode="create">Per Day ${createSort.column === 'p_day_wage' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: center; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="wage_days" data-mode="create">Days ${createSort.column === 'wage_days' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="gross_salary" data-mode="create">Gross ${createSort.column === 'gross_salary' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="epf_deduction" data-mode="create">EPF ${createSort.column === 'epf_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="esic_deduction" data-mode="create">ESIC ${createSort.column === 'esic_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="other_deduction" data-mode="create">Other Ded ${createSort.column === 'other_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="other_benefit" data-mode="create">Other Ben ${createSort.column === 'other_benefit' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort-column" data-column="net_salary" data-mode="create">Net Salary ${createSort.column === 'net_salary' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 12px; text-align: center; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="p_day_wage" data-mode="create">Per Day ${createSort.column === 'p_day_wage' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 12px; text-align: center; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="wage_days" data-mode="create">Days ${createSort.column === 'wage_days' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="gross_salary" data-mode="create">Gross ${createSort.column === 'gross_salary' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="epf_deduction" data-mode="create">EPF ${createSort.column === 'epf_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="esic_deduction" data-mode="create">ESIC ${createSort.column === 'esic_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="other_deduction" data-mode="create">Other Ded ${createSort.column === 'other_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="other_benefit" data-mode="create">Other Ben ${createSort.column === 'other_benefit' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th style="padding: 12px; text-align: right; font-weight: 600; color: white; cursor: pointer;" data-action="sort" data-column="net_salary" data-mode="create">Net Salary ${createSort.column === 'net_salary' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
                   </tr>
                 </thead>
                 <tbody>
