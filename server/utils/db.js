@@ -74,9 +74,46 @@ db.exec(`
 CREATE TABLE IF NOT EXISTS firms (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
-  code TEXT NOT NULL UNIQUE,
+  code TEXT,
   description TEXT,
+  legal_name TEXT,
+  address TEXT,
+  city TEXT,
+  state TEXT,
+  country TEXT,
+  pincode TEXT,
+  phone_number TEXT,
+  secondary_phone TEXT,
+  email TEXT,
+  website TEXT,
+  business_type TEXT,
+  industry_type TEXT,
+  establishment_year INTEGER,
+  employee_count INTEGER,
+  registration_number TEXT,
+  registration_date TEXT,
+  cin_number TEXT,
+  pan_number TEXT,
+  gst_number TEXT,
+  tax_id TEXT,
+  vat_number TEXT,
+  bank_account_number TEXT,
+  bank_name TEXT,
+  bank_branch TEXT,
+  ifsc_code TEXT,
+  payment_terms TEXT,
   status TEXT CHECK(status IN ('pending','approved','rejected')) DEFAULT 'approved',
+  license_numbers TEXT,
+  insurance_details TEXT,
+  currency TEXT DEFAULT 'INR',
+  timezone TEXT DEFAULT 'Asia/Kolkata',
+  fiscal_year_start TEXT,
+  invoice_prefix TEXT,
+  quote_prefix TEXT,
+  po_prefix TEXT,
+  logo_url TEXT,
+  invoice_template TEXT,
+  enable_e_invoice INTEGER DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 ) STRICT;
@@ -189,14 +226,191 @@ CREATE TABLE IF NOT EXISTS user_wages (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (wage_id) REFERENCES wages(id) ON DELETE CASCADE
 ) STRICT;
+
+-- INVENTORY: STOCKS (WITH BATCH SUPPORT)
+CREATE TABLE IF NOT EXISTS stocks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  firm_id INTEGER NOT NULL,
+  item TEXT NOT NULL,
+  pno TEXT,
+  oem TEXT,
+  hsn TEXT NOT NULL,
+  qty REAL NOT NULL DEFAULT 0,
+  uom TEXT NOT NULL DEFAULT 'pcs',
+  rate REAL NOT NULL DEFAULT 0,
+  grate REAL NOT NULL DEFAULT 0,
+  total REAL NOT NULL DEFAULT 0,
+  mrp REAL,
+  batches TEXT,
+  user TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE
+) STRICT;
+
+-- INVENTORY: PARTIES (CUSTOMERS/SUPPLIERS)
+CREATE TABLE IF NOT EXISTS parties (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  firm_id INTEGER NOT NULL,
+  firm TEXT NOT NULL,
+  gstin TEXT DEFAULT 'UNREGISTERED',
+  contact TEXT,
+  state TEXT,
+  state_code TEXT,
+  addr TEXT,
+  pin TEXT,
+  pan TEXT,
+  usern TEXT,
+  supply TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE
+) STRICT;
+
+-- INVENTORY: BILLS (SALES/PURCHASE INVOICES)
+CREATE TABLE IF NOT EXISTS bills (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  firm_id INTEGER NOT NULL,
+  bno TEXT NOT NULL,
+  bdate TEXT NOT NULL,
+  supply TEXT,
+  addr TEXT,
+  gstin TEXT,
+  state TEXT,
+  pin TEXT,
+  state_code TEXT,
+  gtot REAL NOT NULL DEFAULT 0,
+  ntot REAL NOT NULL DEFAULT 0,
+  rof REAL DEFAULT 0,
+  btype TEXT DEFAULT 'SALES',
+  usern TEXT,
+  firm TEXT,
+  party_id INTEGER,
+  oth_chg_json TEXT,
+  order_no TEXT,
+  vehicle_no TEXT,
+  dispatch_through TEXT,
+  narration TEXT,
+  reverse_charge INTEGER DEFAULT 0,
+  cgst REAL DEFAULT 0,
+  sgst REAL DEFAULT 0,
+  igst REAL DEFAULT 0,
+  status TEXT DEFAULT 'ACTIVE',
+  cancellation_reason TEXT,
+  cancelled_at TEXT,
+  cancelled_by INTEGER,
+  consignee_name TEXT,
+  consignee_gstin TEXT,
+  consignee_address TEXT,
+  consignee_state TEXT,
+  consignee_pin TEXT,
+  consignee_state_code TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE,
+  FOREIGN KEY (party_id) REFERENCES parties(id) ON DELETE SET NULL,
+  FOREIGN KEY (cancelled_by) REFERENCES users(id) ON DELETE SET NULL
+) STRICT;
+
+-- INVENTORY: STOCK REGISTER (STOCK MOVEMENTS)
+CREATE TABLE IF NOT EXISTS stock_reg (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  firm_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  bno TEXT,
+  bdate TEXT,
+  supply TEXT,
+  item TEXT NOT NULL,
+  item_narration TEXT,
+  batch TEXT,
+  hsn TEXT,
+  qty REAL NOT NULL,
+  uom TEXT,
+  rate REAL DEFAULT 0,
+  grate REAL DEFAULT 0,
+  disc REAL DEFAULT 0,
+  total REAL DEFAULT 0,
+  stock_id INTEGER,
+  bill_id INTEGER,
+  user TEXT,
+  firm TEXT,
+  qtyh REAL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE,
+  FOREIGN KEY (stock_id) REFERENCES stocks(id) ON DELETE SET NULL,
+  FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE SET NULL
+) STRICT;
+
+-- ACCOUNTING: LEDGER (GENERAL LEDGER ENTRIES)
+CREATE TABLE IF NOT EXISTS ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  firm_id INTEGER NOT NULL,
+  voucher_id INTEGER,
+  voucher_type TEXT,
+  voucher_no TEXT,
+  account_head TEXT NOT NULL,
+  account_type TEXT,
+  debit_amount REAL DEFAULT 0,
+  credit_amount REAL DEFAULT 0,
+  narration TEXT,
+  bill_id INTEGER,
+  party_id INTEGER,
+  tax_type TEXT,
+  tax_rate REAL,
+  transaction_date TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE,
+  FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE SET NULL,
+  FOREIGN KEY (party_id) REFERENCES parties(id) ON DELETE SET NULL
+) STRICT;
+
+-- BILL SEQUENCES (FOR BILL NUMBER GENERATION)
+CREATE TABLE IF NOT EXISTS bill_sequences (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  firm_id INTEGER NOT NULL,
+  financial_year TEXT NOT NULL,
+  current_sequence INTEGER DEFAULT 0,
+  next_sequence INTEGER DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(firm_id, financial_year),
+  FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE
+) STRICT;
+
+-- GLOBAL SETTINGS
+CREATE TABLE IF NOT EXISTS settings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  setting_key TEXT NOT NULL UNIQUE,
+  setting_value TEXT,
+  description TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+) STRICT;
+
+-- FIRM-SPECIFIC SETTINGS
+CREATE TABLE IF NOT EXISTS firm_settings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  firm_id INTEGER NOT NULL,
+  setting_key TEXT NOT NULL,
+  setting_value TEXT,
+  description TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(firm_id, setting_key),
+  FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE
+) STRICT;
 `);
 
 /* --------------------------------------------------
    INDEXES FOR PERFORMANCE
 -------------------------------------------------- */
 
-// Create indexes if they don't exist
-db.exec(`
+// Create indexes if they don't exist - wrapped in try-catch for safety
+try {
+  db.exec(`
   -- Unique index on aadhar per firm (employee can't be duplicated within a firm)
   CREATE UNIQUE INDEX IF NOT EXISTS idx_master_rolls_aadhar_firm 
   ON master_rolls(aadhar, firm_id);
@@ -252,7 +466,100 @@ db.exec(`
   -- Index on payment tracking fields
   CREATE INDEX IF NOT EXISTS idx_wages_paid_date 
   ON wages(paid_date);
-`);
+
+  -- INVENTORY INDEXES
+  CREATE INDEX IF NOT EXISTS idx_stocks_firm_id 
+  ON stocks(firm_id);
+
+  CREATE INDEX IF NOT EXISTS idx_stocks_item 
+  ON stocks(item);
+
+  CREATE INDEX IF NOT EXISTS idx_stocks_hsn 
+  ON stocks(hsn);
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_stocks_firm_item 
+  ON stocks(firm_id, item);
+
+  -- PARTIES INDEXES
+  CREATE INDEX IF NOT EXISTS idx_parties_firm_id 
+  ON parties(firm_id);
+
+  CREATE INDEX IF NOT EXISTS idx_parties_firm 
+  ON parties(firm);
+
+  CREATE INDEX IF NOT EXISTS idx_parties_gstin 
+  ON parties(gstin);
+
+  -- BILLS INDEXES
+  CREATE INDEX IF NOT EXISTS idx_bills_firm_id 
+  ON bills(firm_id);
+
+  CREATE INDEX IF NOT EXISTS idx_bills_bno 
+  ON bills(bno);
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_bills_firm_bno 
+  ON bills(firm_id, bno);
+
+  CREATE INDEX IF NOT EXISTS idx_bills_bdate 
+  ON bills(bdate);
+
+  CREATE INDEX IF NOT EXISTS idx_bills_party_id 
+  ON bills(party_id);
+
+  CREATE INDEX IF NOT EXISTS idx_bills_status 
+  ON bills(status);
+
+  -- STOCK REGISTER INDEXES
+  CREATE INDEX IF NOT EXISTS idx_stock_reg_firm_id 
+  ON stock_reg(firm_id);
+
+  CREATE INDEX IF NOT EXISTS idx_stock_reg_stock_id 
+  ON stock_reg(stock_id);
+
+  CREATE INDEX IF NOT EXISTS idx_stock_reg_bill_id 
+  ON stock_reg(bill_id);
+
+  CREATE INDEX IF NOT EXISTS idx_stock_reg_type 
+  ON stock_reg(type);
+
+  CREATE INDEX IF NOT EXISTS idx_stock_reg_bdate 
+  ON stock_reg(bdate);
+
+  -- LEDGER INDEXES
+  CREATE INDEX IF NOT EXISTS idx_ledger_firm_id 
+  ON ledger(firm_id);
+
+  CREATE INDEX IF NOT EXISTS idx_ledger_voucher_id 
+  ON ledger(voucher_id);
+
+  CREATE INDEX IF NOT EXISTS idx_ledger_bill_id 
+  ON ledger(bill_id);
+
+  CREATE INDEX IF NOT EXISTS idx_ledger_party_id 
+  ON ledger(party_id);
+
+  CREATE INDEX IF NOT EXISTS idx_ledger_account_head 
+  ON ledger(account_head);
+
+  CREATE INDEX IF NOT EXISTS idx_ledger_transaction_date 
+  ON ledger(transaction_date);
+
+  -- BILL SEQUENCES INDEXES
+  CREATE INDEX IF NOT EXISTS idx_bill_sequences_firm_id 
+  ON bill_sequences(firm_id);
+
+  -- SETTINGS INDEXES
+  CREATE INDEX IF NOT EXISTS idx_firm_settings_firm_id 
+  ON firm_settings(firm_id);
+  `);
+  console.log('✅ All indexes created successfully');
+} catch (err) {
+  if (err.message.includes('no such column') || err.message.includes('no such table')) {
+    console.log('ℹ️  Some indexes skipped (tables may not exist yet or columns missing):', err.message);
+  } else {
+    console.error('❌ Error creating indexes:', err.message);
+  }
+}
 
 
 /* --------------------------------------------------
@@ -292,11 +599,56 @@ addColumnIfNotExists('wages', 'paid_from_bank_ac TEXT');
 addColumnIfNotExists('wages', 'created_by INTEGER DEFAULT 1');
 addColumnIfNotExists('wages', 'updated_by INTEGER DEFAULT 1');
 
+/* ---- firms missing columns ---- */
+addColumnIfNotExists('firms', 'legal_name TEXT');
+addColumnIfNotExists('firms', 'address TEXT');
+addColumnIfNotExists('firms', 'city TEXT');
+addColumnIfNotExists('firms', 'state TEXT');
+addColumnIfNotExists('firms', 'country TEXT');
+addColumnIfNotExists('firms', 'pincode TEXT');
+addColumnIfNotExists('firms', 'phone_number TEXT');
+addColumnIfNotExists('firms', 'secondary_phone TEXT');
+addColumnIfNotExists('firms', 'email TEXT');
+addColumnIfNotExists('firms', 'website TEXT');
+addColumnIfNotExists('firms', 'business_type TEXT');
+addColumnIfNotExists('firms', 'industry_type TEXT');
+addColumnIfNotExists('firms', 'establishment_year INTEGER');
+addColumnIfNotExists('firms', 'employee_count INTEGER');
+addColumnIfNotExists('firms', 'registration_number TEXT');
+addColumnIfNotExists('firms', 'registration_date TEXT');
+addColumnIfNotExists('firms', 'cin_number TEXT');
+addColumnIfNotExists('firms', 'pan_number TEXT');
+addColumnIfNotExists('firms', 'gst_number TEXT');
+addColumnIfNotExists('firms', 'tax_id TEXT');
+addColumnIfNotExists('firms', 'vat_number TEXT');
+addColumnIfNotExists('firms', 'bank_account_number TEXT');
+addColumnIfNotExists('firms', 'bank_name TEXT');
+addColumnIfNotExists('firms', 'bank_branch TEXT');
+addColumnIfNotExists('firms', 'ifsc_code TEXT');
+addColumnIfNotExists('firms', 'payment_terms TEXT');
+addColumnIfNotExists('firms', 'license_numbers TEXT');
+addColumnIfNotExists('firms', 'insurance_details TEXT');
+addColumnIfNotExists('firms', 'currency TEXT DEFAULT "INR"');
+addColumnIfNotExists('firms', 'timezone TEXT DEFAULT "Asia/Kolkata"');
+addColumnIfNotExists('firms', 'fiscal_year_start TEXT');
+addColumnIfNotExists('firms', 'invoice_prefix TEXT');
+addColumnIfNotExists('firms', 'quote_prefix TEXT');
+addColumnIfNotExists('firms', 'po_prefix TEXT');
+addColumnIfNotExists('firms', 'logo_url TEXT');
+addColumnIfNotExists('firms', 'invoice_template TEXT');
+addColumnIfNotExists('firms', 'enable_e_invoice INTEGER DEFAULT 0');
+
+/* ---- settings missing columns ---- */
+addColumnIfNotExists('settings', 'description TEXT');
+
+/* ---- firm_settings missing columns ---- */
+addColumnIfNotExists('firm_settings', 'description TEXT');
+
 /* ---------- FIRM ---------- */
 export const Firm = {
   create: db.prepare(`
-    INSERT INTO firms (name, code, description, status)
-    VALUES (@name, @code, @description, @status)
+    INSERT INTO firms (name, code, description, legal_name, address, city, state, country, pincode, phone_number, secondary_phone, email, website, business_type, industry_type, establishment_year, employee_count, registration_number, registration_date, cin_number, pan_number, gst_number, tax_id, vat_number, bank_account_number, bank_name, bank_branch, ifsc_code, payment_terms, status, license_numbers, insurance_details, currency, timezone, fiscal_year_start, invoice_prefix, quote_prefix, po_prefix, logo_url, invoice_template, enable_e_invoice)
+    VALUES (@name, @code, @description, @legal_name, @address, @city, @state, @country, @pincode, @phone_number, @secondary_phone, @email, @website, @business_type, @industry_type, @establishment_year, @employee_count, @registration_number, @registration_date, @cin_number, @pan_number, @gst_number, @tax_id, @vat_number, @bank_account_number, @bank_name, @bank_branch, @ifsc_code, @payment_terms, @status, @license_numbers, @insurance_details, @currency, @timezone, @fiscal_year_start, @invoice_prefix, @quote_prefix, @po_prefix, @logo_url, @invoice_template, @enable_e_invoice)
   `),
 
   getById: db.prepare(`SELECT * FROM firms WHERE id = ?`),
@@ -309,7 +661,56 @@ export const Firm = {
     UPDATE firms 
     SET status = @status, updated_at = datetime('now')
     WHERE id = @id
-  `)
+  `),
+
+  update: db.prepare(`
+    UPDATE firms 
+    SET name = COALESCE(@name, name),
+        code = COALESCE(@code, code),
+        description = COALESCE(@description, description),
+        legal_name = COALESCE(@legal_name, legal_name),
+        address = COALESCE(@address, address),
+        city = COALESCE(@city, city),
+        state = COALESCE(@state, state),
+        country = COALESCE(@country, country),
+        pincode = COALESCE(@pincode, pincode),
+        phone_number = COALESCE(@phone_number, phone_number),
+        secondary_phone = COALESCE(@secondary_phone, secondary_phone),
+        email = COALESCE(@email, email),
+        website = COALESCE(@website, website),
+        business_type = COALESCE(@business_type, business_type),
+        industry_type = COALESCE(@industry_type, industry_type),
+        establishment_year = COALESCE(@establishment_year, establishment_year),
+        employee_count = COALESCE(@employee_count, employee_count),
+        registration_number = COALESCE(@registration_number, registration_number),
+        registration_date = COALESCE(@registration_date, registration_date),
+        cin_number = COALESCE(@cin_number, cin_number),
+        pan_number = COALESCE(@pan_number, pan_number),
+        gst_number = COALESCE(@gst_number, gst_number),
+        tax_id = COALESCE(@tax_id, tax_id),
+        vat_number = COALESCE(@vat_number, vat_number),
+        bank_account_number = COALESCE(@bank_account_number, bank_account_number),
+        bank_name = COALESCE(@bank_name, bank_name),
+        bank_branch = COALESCE(@bank_branch, bank_branch),
+        ifsc_code = COALESCE(@ifsc_code, ifsc_code),
+        payment_terms = COALESCE(@payment_terms, payment_terms),
+        status = COALESCE(@status, status),
+        license_numbers = COALESCE(@license_numbers, license_numbers),
+        insurance_details = COALESCE(@insurance_details, insurance_details),
+        currency = COALESCE(@currency, currency),
+        timezone = COALESCE(@timezone, timezone),
+        fiscal_year_start = COALESCE(@fiscal_year_start, fiscal_year_start),
+        invoice_prefix = COALESCE(@invoice_prefix, invoice_prefix),
+        quote_prefix = COALESCE(@quote_prefix, quote_prefix),
+        po_prefix = COALESCE(@po_prefix, po_prefix),
+        logo_url = COALESCE(@logo_url, logo_url),
+        invoice_template = COALESCE(@invoice_template, invoice_template),
+        enable_e_invoice = COALESCE(@enable_e_invoice, enable_e_invoice),
+        updated_at = datetime('now')
+    WHERE id = @id
+  `),
+
+  delete: db.prepare(`DELETE FROM firms WHERE id = ?`)
 };
 
 /* ---------- USER ---------- */
@@ -588,6 +989,239 @@ export const Relations = {
     WHERE uw.user_id = ?
   `)
 };
+
+/* ---------- INVENTORY: STOCKS ---------- */
+export const Stock = {
+  create: db.prepare(`
+    INSERT INTO stocks (firm_id, item, pno, oem, hsn, qty, uom, rate, grate, total, mrp, batches, user)
+    VALUES (@firm_id, @item, @pno, @oem, @hsn, @qty, @uom, @rate, @grate, @total, @mrp, @batches, @user)
+  `),
+
+  getById: db.prepare(`
+    SELECT * FROM stocks WHERE id = ? AND firm_id = ?
+  `),
+
+  getByFirm: db.prepare(`
+    SELECT * FROM stocks WHERE firm_id = ? ORDER BY created_at DESC
+  `),
+
+  getByItem: db.prepare(`
+    SELECT * FROM stocks WHERE firm_id = ? AND item = ?
+  `),
+
+  update: db.prepare(`
+    UPDATE stocks 
+    SET item = @item, pno = @pno, oem = @oem, hsn = @hsn, qty = @qty, uom = @uom, 
+        rate = @rate, grate = @grate, total = @total, mrp = @mrp, batches = @batches, user = @user, updated_at = datetime('now')
+    WHERE id = @id AND firm_id = @firm_id
+  `),
+
+  delete: db.prepare(`
+    DELETE FROM stocks WHERE id = ? AND firm_id = ?
+  `)
+};
+
+/* ---------- INVENTORY: PARTIES ---------- */
+export const Party = {
+  create: db.prepare(`
+    INSERT INTO parties (firm_id, firm, gstin, contact, state, state_code, addr, pin, pan, usern, supply)
+    VALUES (@firm_id, @firm, @gstin, @contact, @state, @state_code, @addr, @pin, @pan, @usern, @supply)
+  `),
+
+  getById: db.prepare(`
+    SELECT * FROM parties WHERE id = ? AND firm_id = ?
+  `),
+
+  getByFirm: db.prepare(`
+    SELECT * FROM parties WHERE firm_id = ? ORDER BY created_at DESC
+  `),
+
+  getByName: db.prepare(`
+    SELECT * FROM parties WHERE firm_id = ? AND firm = ?
+  `),
+
+  update: db.prepare(`
+    UPDATE parties 
+    SET firm = @firm, gstin = @gstin, contact = @contact, state = @state, state_code = @state_code, 
+        addr = @addr, pin = @pin, pan = @pan, supply = @supply, updated_at = datetime('now')
+    WHERE id = @id AND firm_id = @firm_id
+  `),
+
+  delete: db.prepare(`
+    DELETE FROM parties WHERE id = ? AND firm_id = ?
+  `)
+};
+
+/* ---------- INVENTORY: BILLS ---------- */
+export const Bill = {
+  create: db.prepare(`
+    INSERT INTO bills (firm_id, bno, bdate, supply, addr, gstin, state, pin, state_code, gtot, ntot, rof, btype, usern, firm, party_id, oth_chg_json, order_no, vehicle_no, dispatch_through, narration, reverse_charge, cgst, sgst, igst, consignee_name, consignee_gstin, consignee_address, consignee_state, consignee_pin, consignee_state_code)
+    VALUES (@firm_id, @bno, @bdate, @supply, @addr, @gstin, @state, @pin, @state_code, @gtot, @ntot, @rof, @btype, @usern, @firm, @party_id, @oth_chg_json, @order_no, @vehicle_no, @dispatch_through, @narration, @reverse_charge, @cgst, @sgst, @igst, @consignee_name, @consignee_gstin, @consignee_address, @consignee_state, @consignee_pin, @consignee_state_code)
+  `),
+
+  getById: db.prepare(`
+    SELECT * FROM bills WHERE id = ? AND firm_id = ?
+  `),
+
+  getByBillNo: db.prepare(`
+    SELECT * FROM bills WHERE firm_id = ? AND bno = ?
+  `),
+
+  getByFirm: db.prepare(`
+    SELECT * FROM bills WHERE firm_id = ? ORDER BY bdate DESC, created_at DESC
+  `),
+
+  update: db.prepare(`
+    UPDATE bills 
+    SET bno = @bno, bdate = @bdate, supply = @supply, addr = @addr, gstin = @gstin, state = @state, pin = @pin, state_code = @state_code, 
+        gtot = @gtot, ntot = @ntot, rof = @rof, btype = @btype, usern = @usern, firm = @firm, party_id = @party_id, 
+        oth_chg_json = @oth_chg_json, order_no = @order_no, vehicle_no = @vehicle_no, dispatch_through = @dispatch_through, 
+        narration = @narration, reverse_charge = @reverse_charge, cgst = @cgst, sgst = @sgst, igst = @igst,
+        consignee_name = @consignee_name, consignee_gstin = @consignee_gstin, consignee_address = @consignee_address, 
+        consignee_state = @consignee_state, consignee_pin = @consignee_pin, consignee_state_code = @consignee_state_code,
+        updated_at = datetime('now')
+    WHERE id = @id AND firm_id = @firm_id
+  `),
+
+  updateStatus: db.prepare(`
+    UPDATE bills 
+    SET status = @status, cancellation_reason = @cancellation_reason, cancelled_at = @cancelled_at, cancelled_by = @cancelled_by, updated_at = datetime('now')
+    WHERE id = @id AND firm_id = @firm_id
+  `),
+
+  delete: db.prepare(`
+    DELETE FROM bills WHERE id = ? AND firm_id = ?
+  `)
+};
+
+/* ---------- INVENTORY: STOCK REGISTER ---------- */
+export const StockReg = {
+  create: db.prepare(`
+    INSERT INTO stock_reg (firm_id, type, bno, bdate, supply, item, item_narration, batch, hsn, qty, uom, rate, grate, disc, total, stock_id, bill_id, user, firm, qtyh)
+    VALUES (@firm_id, @type, @bno, @bdate, @supply, @item, @item_narration, @batch, @hsn, @qty, @uom, @rate, @grate, @disc, @total, @stock_id, @bill_id, @user, @firm, @qtyh)
+  `),
+
+  getById: db.prepare(`
+    SELECT * FROM stock_reg WHERE id = ? AND firm_id = ?
+  `),
+
+  getByBillId: db.prepare(`
+    SELECT * FROM stock_reg WHERE bill_id = ? AND firm_id = ? ORDER BY created_at
+  `),
+
+  getByStockId: db.prepare(`
+    SELECT * FROM stock_reg WHERE stock_id = ? AND firm_id = ? ORDER BY bdate DESC, created_at DESC
+  `),
+
+  getByFirm: db.prepare(`
+    SELECT * FROM stock_reg WHERE firm_id = ? ORDER BY bdate DESC, created_at DESC
+  `),
+
+  delete: db.prepare(`
+    DELETE FROM stock_reg WHERE id = ? AND firm_id = ?
+  `),
+
+  deleteByBillId: db.prepare(`
+    DELETE FROM stock_reg WHERE bill_id = ? AND firm_id = ?
+  `)
+};
+
+/* ---------- ACCOUNTING: LEDGER ---------- */
+export const Ledger = {
+  create: db.prepare(`
+    INSERT INTO ledger (firm_id, voucher_id, voucher_type, voucher_no, account_head, account_type, debit_amount, credit_amount, narration, bill_id, party_id, tax_type, tax_rate, transaction_date, created_by)
+    VALUES (@firm_id, @voucher_id, @voucher_type, @voucher_no, @account_head, @account_type, @debit_amount, @credit_amount, @narration, @bill_id, @party_id, @tax_type, @tax_rate, @transaction_date, @created_by)
+  `),
+
+  getById: db.prepare(`
+    SELECT * FROM ledger WHERE id = ? AND firm_id = ?
+  `),
+
+  getByVoucherId: db.prepare(`
+    SELECT * FROM ledger WHERE voucher_id = ? AND firm_id = ? ORDER BY created_at
+  `),
+
+  getByBillId: db.prepare(`
+    SELECT * FROM ledger WHERE bill_id = ? AND firm_id = ? ORDER BY created_at
+  `),
+
+  getByFirm: db.prepare(`
+    SELECT * FROM ledger WHERE firm_id = ? ORDER BY transaction_date DESC, created_at DESC
+  `),
+
+  getByAccountHead: db.prepare(`
+    SELECT * FROM ledger WHERE firm_id = ? AND account_head = ? ORDER BY transaction_date DESC
+  `),
+
+  delete: db.prepare(`
+    DELETE FROM ledger WHERE id = ? AND firm_id = ?
+  `),
+
+  deleteByVoucherId: db.prepare(`
+    DELETE FROM ledger WHERE voucher_id = ? AND voucher_type = ? AND firm_id = ?
+  `)
+};
+
+/* ---------- BILL SEQUENCES ---------- */
+export const BillSequence = {
+  create: db.prepare(`
+    INSERT INTO bill_sequences (firm_id, financial_year, current_sequence, next_sequence)
+    VALUES (@firm_id, @financial_year, @current_sequence, @next_sequence)
+  `),
+
+  getByFirmAndYear: db.prepare(`
+    SELECT * FROM bill_sequences WHERE firm_id = ? AND financial_year = ?
+  `),
+
+  update: db.prepare(`
+    UPDATE bill_sequences 
+    SET current_sequence = @current_sequence, next_sequence = @next_sequence, updated_at = datetime('now')
+    WHERE firm_id = @firm_id AND financial_year = @financial_year
+  `)
+};
+
+/* ---------- SETTINGS ---------- */
+export const Settings = {
+  create: db.prepare(`
+    INSERT INTO settings (setting_key, setting_value, description)
+    VALUES (@setting_key, @setting_value, @description)
+  `),
+
+  getByKey: db.prepare(`
+    SELECT * FROM settings WHERE setting_key = ?
+  `),
+
+  getAll: db.prepare(`
+    SELECT * FROM settings ORDER BY setting_key
+  `),
+
+  update: db.prepare(`
+    UPDATE settings SET setting_value = @setting_value, description = @description, updated_at = datetime('now')
+    WHERE setting_key = @setting_key
+  `)
+};
+
+/* ---------- FIRM SETTINGS ---------- */
+export const FirmSettings = {
+  create: db.prepare(`
+    INSERT INTO firm_settings (firm_id, setting_key, setting_value, description)
+    VALUES (@firm_id, @setting_key, @setting_value, @description)
+  `),
+
+  getByFirmAndKey: db.prepare(`
+    SELECT * FROM firm_settings WHERE firm_id = ? AND setting_key = ?
+  `),
+
+  getByFirm: db.prepare(`
+    SELECT * FROM firm_settings WHERE firm_id = ? ORDER BY setting_key
+  `),
+
+  update: db.prepare(`
+    UPDATE firm_settings SET setting_value = @setting_value, description = @description, updated_at = datetime('now')
+    WHERE firm_id = @firm_id AND setting_key = @setting_key
+  `)
+};
+
 
 console.log('✅ Database initialized with multi-firm support and payment tracking');
 

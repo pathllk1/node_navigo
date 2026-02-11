@@ -1,4 +1,4 @@
-import { db } from './db.js';
+import { db, Settings } from './db.js';
 import bcrypt from 'bcrypt';
 
 /**
@@ -16,30 +16,40 @@ async function seedSuperAdmin() {
 
     if (existingSuperAdmin) {
       console.log('✅ Super admin already exists');
-      return;
+    } else {
+      // Create super admin
+      const password = 'SuperAdmin@123'; // Change this in production!
+      const hashedPassword = await bcrypt.hash(password, 12);
+
+      const result = db.prepare(`
+        INSERT INTO users (username, email, fullname, password, role, firm_id, status)
+        VALUES (@username, @email, @fullname, @password, @role, @firm_id, @status)
+      `).run({
+        username: 'superadmin',
+        email: 'superadmin@system.com',
+        fullname: 'Super Administrator',
+        password: hashedPassword,
+        role: 'super_admin',
+        firm_id: null,
+        status: 'approved'
+      });
+
+      console.log('✅ Super admin created successfully');
+      console.log('📧 Email: superadmin@system.com');
+      console.log('🔑 Password: SuperAdmin@123');
+      console.log('⚠️  IMPORTANT: Change the password after first login!');
     }
 
-    // Create super admin
-    const password = 'SuperAdmin@123'; // Change this in production!
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    const result = db.prepare(`
-      INSERT INTO users (username, email, fullname, password, role, firm_id, status)
-      VALUES (@username, @email, @fullname, @password, @role, @firm_id, @status)
-    `).run({
-      username: 'superadmin',
-      email: 'superadmin@system.com',
-      fullname: 'Super Administrator',
-      password: hashedPassword,
-      role: 'super_admin',
-      firm_id: null,
-      status: 'approved'
-    });
-
-    console.log('✅ Super admin created successfully');
-    console.log('📧 Email: superadmin@system.com');
-    console.log('🔑 Password: SuperAdmin@123');
-    console.log('⚠️  IMPORTANT: Change the password after first login!');
+    // Initialize gst_enabled setting if it doesn't exist
+    const existingGstSetting = Settings.getByKey.get('gst_enabled');
+    if (!existingGstSetting) {
+      Settings.create.run({
+        setting_key: 'gst_enabled',
+        setting_value: 'true',
+        description: 'Global GST calculation toggle'
+      });
+      console.log('✅ GST setting initialized');
+    }
 
   } catch (err) {
     console.error('❌ Error seeding super admin:', err);

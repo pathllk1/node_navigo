@@ -1,40 +1,20 @@
-/**
- * Settings Routes
- * Handles firm settings, system settings, and configurations
- */
-
 import express from 'express';
-import * as settingsController from '../controllers/settings.controller.js';
-import { authenticateJWT } from '../middleware/auth.js';
+import * as settingsController from '../controllers/settingsController.js';
+import * as systemConfigController from '../controllers/systemConfigController.js';
 
 const router = express.Router();
 
-// All routes require authentication
-router.use(authenticateJWT);
+// System config endpoints (must come BEFORE /:key routes to avoid conflicts)
+router.get('/system-config/gst-status', systemConfigController.getGstStatus);
+router.put('/system-config/gst-status', systemConfigController.toggleGstStatus);
+router.get('/system-config/all', systemConfigController.getAllSettings);
+router.get('/system-config/:key', systemConfigController.getSetting);
+router.put('/system-config/:key', systemConfigController.updateSetting);
 
-// Firm Settings
-router.get('/firm', settingsController.getFirmSettings);
-router.put('/firm', settingsController.updateFirmSettings);
-
-// Invoice Settings
-router.get('/invoice', settingsController.getInvoiceSettings);
-router.put('/invoice', settingsController.updateInvoiceSettings);
-
-// Number Format Settings
-router.get('/number-format', settingsController.getNumberFormatSettings);
-router.put('/number-format', settingsController.updateNumberFormatSettings);
-
-// Tax Settings
-router.get('/tax', settingsController.getTaxSettings);
-router.put('/tax', settingsController.updateTaxSettings);
-
-// System Settings (Admin only)
-router.get('/system', settingsController.getSystemSettings);
-router.put('/system', settingsController.updateSystemSettings);
-
-// Backup & Restore (Admin only)
-router.post('/backup', settingsController.createBackup);
-router.post('/restore', settingsController.restoreBackup);
-router.get('/backups', settingsController.listBackups);
+// Settings endpoints
+router.get('/', settingsController.getAllSettings);
+router.post('/', settingsController.createSetting);
+router.get('/:key', settingsController.getSetting);
+router.put('/:key', settingsController.updateSetting);
 
 export default router;
