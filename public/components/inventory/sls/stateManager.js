@@ -110,8 +110,27 @@ export async function fetchData(state) {
             state.parties = [];
         }
 
-        // Fetch next bill number
-        await fetchNextBillNumber(state);
+        // Don't fetch bill number on page load - it will be generated when bill is saved
+        // This prevents incrementing the sequence every time the page is visited
+        state.meta.billNo = 'Will be generated on save';
+        
+        // Fetch preview of next bill number (without incrementing sequence)
+        try {
+            const previewResponse = await fetch('/api/inventory/sales/next-bill-number', {
+                method: 'GET',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (previewResponse.ok) {
+                const data = await previewResponse.json();
+                if (data.nextBillNumber) {
+                    state.meta.billNo = data.nextBillNumber;
+                }
+            }
+        } catch (error) {
+            console.warn("Could not fetch bill number preview:", error.message);
+        }
         
         // Fetch GST status
         try {

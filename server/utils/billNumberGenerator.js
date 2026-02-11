@@ -192,9 +192,64 @@ function getNextVoucherNumber(firmId, voucherType, financialYear = null) {
   return result;
 }
 
+/**
+ * Preview next bill number WITHOUT incrementing the sequence
+ * @param {number} firmId - The firm ID
+ * @param {string} billType - Bill type (SALES, PURCHASE, etc.)
+ * @param {string} financialYear - Optional financial year (defaults to current)
+ * @returns {string} The preview bill number
+ */
+function previewNextBillNumber(firmId, billType = 'SALES', financialYear = null) {
+  const fy = financialYear || getCurrentFinancialYear();
+  validateFinancialYear(fy);
+
+  // Determine prefix based on bill type
+  let prefix;
+  switch (billType.toUpperCase()) {
+    case 'SALES':
+      prefix = 'INV';
+      break;
+    case 'PURCHASE':
+      prefix = 'PUR';
+      break;
+    case 'CREDIT_NOTE':
+      prefix = 'CN';
+      break;
+    case 'DEBIT_NOTE':
+      prefix = 'DN';
+      break;
+    case 'DELIVERY_NOTE':
+      prefix = 'DLN';
+      break;
+    default:
+      prefix = 'BILL';
+  }
+
+  // Get sequence record WITHOUT incrementing
+  let seqRecord = db.prepare(`
+    SELECT id, last_sequence 
+    FROM bill_sequences 
+    WHERE firm_id = ? AND financial_year = ? AND (voucher_type IS NULL OR voucher_type = '')
+  `).get(firmId, fy);
+
+  if (!seqRecord) {
+    // If no record exists, the next sequence will be 1
+    const nextSequence = 1;
+    const billNo = `${prefix}F${firmId}-${String(nextSequence).padStart(4, '0')}/${fy}`;
+    return billNo;
+  }
+
+  // Calculate what the next sequence WOULD be
+  const nextSequence = seqRecord.last_sequence + 1;
+  const billNo = `${prefix}F${firmId}-${String(nextSequence).padStart(4, '0')}/${fy}`;
+
+  return billNo;
+}
+
 export {
   getCurrentFinancialYear,
   validateFinancialYear,
   getNextBillNumber,
-  getNextVoucherNumber
+  getNextVoucherNumber,
+  previewNextBillNumber
 };

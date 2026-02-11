@@ -1,5 +1,5 @@
 import { Stock, Party, Bill, StockReg, Ledger, Settings, FirmSettings, db } from '../../../utils/db.js';
-import { getNextBillNumber } from '../../../utils/billNumberGenerator.js';
+import { getNextBillNumber, previewNextBillNumber } from '../../../utils/billNumberGenerator.js';
 
 // Helper to get current ISO time
 const now = () => new Date().toISOString();
@@ -398,7 +398,21 @@ export const createParty = (req, res) => {
             supply: state || ''
         });
 
-        res.json({ id: result.lastInsertRowid, message: 'Party created successfully' });
+        // Fetch and return the created party with all fields
+        const newParty = Party.getById.get(result.lastInsertRowid, req.user.firm_id);
+        
+        res.json({ 
+            id: newParty.id,
+            firm: newParty.firm,
+            gstin: newParty.gstin,
+            contact: newParty.contact,
+            state: newParty.state,
+            state_code: newParty.state_code,
+            addr: newParty.addr,
+            pin: newParty.pin,
+            pan: newParty.pan,
+            message: 'Party created successfully' 
+        });
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -1500,7 +1514,7 @@ export const getNextBillNumberPreviewEndpoint = async (req, res) => {
             return res.status(403).json({ error: 'User is not associated with any firm' });
         }
 
-        const billNo = getNextBillNumber(req.user.firm_id, 'SALES');
+        const billNo = previewNextBillNumber(req.user.firm_id, 'SALES');
         res.json({ nextBillNumber: billNo });
     } catch (err) {
         res.status(500).json({ error: err.message });

@@ -120,6 +120,28 @@ export function initSalesSystem() {
                                     <label class="text-[10px] text-gray-500 font-bold mb-1 block">Address *</label>
                                     <textarea id="consignee-address" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none h-16 resize-none" placeholder="Enter delivery address">${state.selectedConsignee?.address || ''}</textarea>
                                 </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 font-bold mb-1 block">GSTIN</label>
+                                        <input type="text" id="consignee-gstin" value="${state.selectedConsignee?.gstin || ''}" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none uppercase" placeholder="27ABCDE1234F1Z5" maxlength="15">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 font-bold mb-1 block">State *</label>
+                                        <input type="text" id="consignee-state" value="${state.selectedConsignee?.state || ''}" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Enter state">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-gray-500 font-bold mb-1 block">PIN Code</label>
+                                    <input type="text" id="consignee-pin" value="${state.selectedConsignee?.pin || ''}" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Enter PIN code" maxlength="6">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-gray-500 font-bold mb-1 block">Contact</label>
+                                    <input type="text" id="consignee-contact" value="${state.selectedConsignee?.contact || ''}" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Phone/Email">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-gray-500 font-bold mb-1 block">Delivery Instructions</label>
+                                    <textarea id="consignee-delivery-instructions" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none h-12 resize-none" placeholder="Special delivery instructions">${state.selectedConsignee?.deliveryInstructions || ''}</textarea>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -237,7 +259,7 @@ export function initSalesSystem() {
                         }
                     },
                     onCreateStock: () => {
-                        openCreateStockModal(state, async (data) => {
+                        const handleStockCreated = async (data) => {
                             // Stock was already created via API in stockCrud.js
                             // Refresh the stocks list
                             try {
@@ -252,8 +274,47 @@ export function initSalesSystem() {
                             } catch (err) {
                                 console.error('Failed to refresh stocks:', err);
                             }
-                            renderMainLayout();
-                        });
+                            
+                            // Reopen the stock modal so user can select the newly created stock
+                            openStockModal(state, {
+                                onSelectStock: async (stock, showBatchModal) => {
+                                    if (showBatchModal) {
+                                        await showBatchSelectionModal(stock, (stockWithBatch) => {
+                                            addItemToCart(state, stockWithBatch);
+                                            renderMainLayout();
+                                        });
+                                    } else {
+                                        addItemToCart(state, stock);
+                                        renderMainLayout();
+                                    }
+                                },
+                                onCreateStock: () => {
+                                    openCreateStockModal(state, handleStockCreated);
+                                },
+                                onEditStock: (stock) => {
+                                    openEditStockModal(stock, state, async (stockId, data) => {
+                                        try {
+                                            const response = await fetch('/api/inventory/sales/stocks', {
+                                                method: 'GET',
+                                                credentials: 'include',
+                                                headers: { 'Content-Type': 'application/json' }
+                                            });
+                                            if (response.ok) {
+                                                state.stocks = await response.json();
+                                            }
+                                        } catch (err) {
+                                            console.error('Failed to refresh stocks:', err);
+                                        }
+                                        renderMainLayout();
+                                    });
+                                },
+                                onViewHistory: (stock) => {
+                                    openPartyItemHistoryModal(stock, state);
+                                }
+                            });
+                        };
+                        
+                        openCreateStockModal(state, handleStockCreated);
                     },
                     onEditStock: (stock) => {
                         openEditStockModal(stock, state, async (stockId, data) => {
@@ -289,7 +350,14 @@ export function initSalesSystem() {
                     onAddCharge: (charge) => addOtherCharge(state, charge),
                     onRemoveCharge: (idx) => removeOtherCharge(state, idx),
                     onUpdateCharge: (idx, charge) => updateOtherCharge(state, idx, charge),
-                    formatCurrency
+                    formatCurrency,
+                    onSave: () => {
+                        // Update totals section when charges are saved
+                        const totalsSection = document.getElementById('totals-section');
+                        if (totalsSection) {
+                            totalsSection.innerHTML = renderTotals(state);
+                        }
+                    }
                 });
             };
         }
@@ -313,15 +381,17 @@ export function initSalesSystem() {
                     alert('Cannot save an empty invoice. Please add items to the cart.');
                     return;
                 }
+
+                if (!state.selectedParty) {
+                    alert('Please select a party before saving the invoice.');
+                    return;
+                }
                 
                 try {
                     const billData = {
-                        billDate: state.meta.billDate,
-                        billType: state.meta.billType,
-                        reverseCharge: state.meta.reverseCharge,
-                        referenceNo: state.meta.referenceNo,
-                        partyId: state.selectedParty?.id,
-                        items: state.cart,
+                        meta: state.meta,
+                        party: state.selectedParty,
+                        cart: state.cart,
                         otherCharges: state.otherCharges,
                         consignee: state.selectedConsignee
                     };
@@ -358,7 +428,21 @@ export function initSalesSystem() {
                 const idx = parseInt(e.target.dataset.idx);
                 const field = e.target.dataset.field;
                 updateCartItem(state, idx, field, e.target.value);
-                document.getElementById('totals-section').innerHTML = renderTotals(state);
+                
+                // Only update the totals section, not the entire items list
+                // This preserves focus and prevents re-rendering of all inputs
+                const totalsSection = document.getElementById('totals-section');
+                if (totalsSection) {
+                    totalsSection.innerHTML = renderTotals(state);
+                }
+                
+                // Update the row total for this specific item
+                const rowTotalElement = e.target.closest('.flex').querySelector('.row-total');
+                if (rowTotalElement) {
+                    const item = state.cart[idx];
+                    const rowTotal = item.qty * item.rate * (1 - (item.disc || 0) / 100);
+                    rowTotalElement.textContent = formatCurrency(rowTotal);
+                }
             };
         });
 
@@ -414,6 +498,63 @@ export function initSalesSystem() {
         if (billDateInput) {
             billDateInput.oninput = (e) => {
                 state.meta.billDate = e.target.value;
+            };
+        }
+
+        // Consignee details input listeners
+        const consigneeNameInput = document.getElementById('consignee-name');
+        if (consigneeNameInput) {
+            consigneeNameInput.oninput = (e) => {
+                if (!state.selectedConsignee) state.selectedConsignee = {};
+                state.selectedConsignee.name = e.target.value;
+            };
+        }
+
+        const consigneeAddressInput = document.getElementById('consignee-address');
+        if (consigneeAddressInput) {
+            consigneeAddressInput.oninput = (e) => {
+                if (!state.selectedConsignee) state.selectedConsignee = {};
+                state.selectedConsignee.address = e.target.value;
+            };
+        }
+
+        const consigneeGstinInput = document.getElementById('consignee-gstin');
+        if (consigneeGstinInput) {
+            consigneeGstinInput.oninput = (e) => {
+                if (!state.selectedConsignee) state.selectedConsignee = {};
+                state.selectedConsignee.gstin = e.target.value;
+            };
+        }
+
+        const consigneeStateInput = document.getElementById('consignee-state');
+        if (consigneeStateInput) {
+            consigneeStateInput.oninput = (e) => {
+                if (!state.selectedConsignee) state.selectedConsignee = {};
+                state.selectedConsignee.state = e.target.value;
+            };
+        }
+
+        const consigneePinInput = document.getElementById('consignee-pin');
+        if (consigneePinInput) {
+            consigneePinInput.oninput = (e) => {
+                if (!state.selectedConsignee) state.selectedConsignee = {};
+                state.selectedConsignee.pin = e.target.value;
+            };
+        }
+
+        const consigneeContactInput = document.getElementById('consignee-contact');
+        if (consigneeContactInput) {
+            consigneeContactInput.oninput = (e) => {
+                if (!state.selectedConsignee) state.selectedConsignee = {};
+                state.selectedConsignee.contact = e.target.value;
+            };
+        }
+
+        const consigneeInstructionsInput = document.getElementById('consignee-delivery-instructions');
+        if (consigneeInstructionsInput) {
+            consigneeInstructionsInput.oninput = (e) => {
+                if (!state.selectedConsignee) state.selectedConsignee = {};
+                state.selectedConsignee.deliveryInstructions = e.target.value;
             };
         }
     }

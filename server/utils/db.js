@@ -372,11 +372,11 @@ CREATE TABLE IF NOT EXISTS bill_sequences (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   firm_id INTEGER NOT NULL,
   financial_year TEXT NOT NULL,
-  current_sequence INTEGER DEFAULT 0,
-  next_sequence INTEGER DEFAULT 1,
+  last_sequence INTEGER DEFAULT 0,
+  voucher_type TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(firm_id, financial_year),
+  UNIQUE(firm_id, financial_year, voucher_type),
   FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE
 ) STRICT;
 
@@ -1165,8 +1165,8 @@ export const Ledger = {
 /* ---------- BILL SEQUENCES ---------- */
 export const BillSequence = {
   create: db.prepare(`
-    INSERT INTO bill_sequences (firm_id, financial_year, current_sequence, next_sequence)
-    VALUES (@firm_id, @financial_year, @current_sequence, @next_sequence)
+    INSERT INTO bill_sequences (firm_id, financial_year, last_sequence, voucher_type)
+    VALUES (@firm_id, @financial_year, @last_sequence, @voucher_type)
   `),
 
   getByFirmAndYear: db.prepare(`
@@ -1175,8 +1175,8 @@ export const BillSequence = {
 
   update: db.prepare(`
     UPDATE bill_sequences 
-    SET current_sequence = @current_sequence, next_sequence = @next_sequence, updated_at = datetime('now')
-    WHERE firm_id = @firm_id AND financial_year = @financial_year
+    SET last_sequence = @last_sequence, updated_at = datetime('now')
+    WHERE firm_id = @firm_id AND financial_year = @financial_year AND (voucher_type IS NULL OR voucher_type = @voucher_type)
   `)
 };
 

@@ -102,10 +102,14 @@ export function openCreatePartyModal(state, onPartySaved) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
+        // Ensure all required fields are present
         data.supply = data.state;
         data.gstin = data.gstin || 'UNREGISTERED';
-        data.created_at = new Date().toISOString();
-        data.updated_at = new Date().toISOString();
+        data.state_code = data.state_code || null;
+        data.contact = data.contact || null;
+        data.addr = data.addr || null;
+        data.pin = data.pin || null;
+        data.pan = data.pan || null;
 
         try {
             const response = await fetch('/api/inventory/sales/parties', {

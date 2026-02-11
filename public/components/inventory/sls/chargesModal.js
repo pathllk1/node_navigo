@@ -201,7 +201,14 @@ export function openOtherChargesModal(state, callbacks) {
     // Close buttons
     document.getElementById('close-modal').onclick = () => modal.classList.add('hidden');
     document.getElementById('cancel-other-charges').onclick = () => modal.classList.add('hidden');
-    document.getElementById('save-other-charges').onclick = () => modal.classList.add('hidden');
+    document.getElementById('save-other-charges').onclick = () => {
+        modal.classList.add('hidden');
+        
+        // Call the onSave callback if provided
+        if (callbacks.onSave) {
+            callbacks.onSave();
+        }
+    };
 
     updateTotalDisplay();
 }
