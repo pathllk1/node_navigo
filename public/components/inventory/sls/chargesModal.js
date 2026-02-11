@@ -3,6 +3,8 @@
  * Handles other charges management (add, remove, edit)
  */
 
+import { showToast } from './toast.js';
+
 export function openOtherChargesModal(state, callbacks) {
     const { onAddCharge, onRemoveCharge, onUpdateCharge, formatCurrency } = callbacks;
     
@@ -49,10 +51,10 @@ export function openOtherChargesModal(state, callbacks) {
 
         <div class="flex-1 overflow-y-auto p-4 bg-white">
             <div class="grid grid-cols-2 gap-4 mb-6 pb-6 border-b border-gray-200">
-                <div>
+                <div class="relative">
                     <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Charge Name *</label>
                     <input type="text" id="charge-name" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none" placeholder="e.g. Freight, Packing">
-                    <div id="charge-name-suggestions" class="hidden absolute bg-white border border-gray-300 rounded shadow-lg mt-1 w-64 max-h-48 overflow-y-auto z-50"></div>
+                    <div id="charge-name-suggestions" class="hidden absolute bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-48 overflow-y-auto z-50"></div>
                 </div>
                 
                 <div>
@@ -129,6 +131,29 @@ export function openOtherChargesModal(state, callbacks) {
         </div>
     `;
 
+    // Load existing charges for autocomplete
+    let existingCharges = [];
+    
+    async function loadExistingCharges() {
+        try {
+            const response = await fetch('/api/inventory/sales/other-charges-types', {
+                method: 'GET',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                // Use the full charge objects returned from API
+                existingCharges = data.charges || [];
+            }
+        } catch (error) {
+            console.warn('Error loading existing charges:', error);
+        }
+    }
+    
+    loadExistingCharges();
+
     // Update total display
     const updateTotalDisplay = () => {
         const total = state.otherCharges.reduce((sum, charge) => {
@@ -144,6 +169,68 @@ export function openOtherChargesModal(state, callbacks) {
         }
     };
 
+    // Autocomplete functionality for charge name
+    const chargeNameInput = document.getElementById('charge-name');
+    const suggestionsContainer = document.getElementById('charge-name-suggestions');
+    
+    chargeNameInput.addEventListener('input', function() {
+        const query = this.value.toLowerCase();
+        
+        if (query.length === 0) {
+            suggestionsContainer.classList.add('hidden');
+            return;
+        }
+        
+        // Filter existing charges based on query
+        const filteredCharges = existingCharges.filter(charge => 
+            charge.name.toLowerCase().includes(query) || 
+            charge.type.toLowerCase().includes(query)
+        );
+        
+        if (filteredCharges.length > 0) {
+            suggestionsContainer.innerHTML = filteredCharges.map(charge => {
+                return `<div class="charge-suggestion-item p-2 hover:bg-blue-100 cursor-pointer border-b border-gray-100" 
+                        data-name="${charge.name}" 
+                        data-type="${charge.type}" 
+                        data-hsnSac="${charge.hsnSac || ''}" 
+                        data-gstRate="${charge.gstRate || 0}">
+                        <div class="font-medium truncate">${charge.name || charge.type}</div>
+                        <div class="text-xs text-gray-500 truncate">Type: ${charge.type} | HSN/SAC: ${charge.hsnSac || 'N/A'} | GST: ${charge.gstRate || 0}%</div>
+                    </div>`;
+            }).join('');
+            
+            // Add event listeners to suggestion items
+            suggestionsContainer.querySelectorAll('.charge-suggestion-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const name = this.getAttribute('data-name');
+                    const type = this.getAttribute('data-type');
+                    const hsnSac = this.getAttribute('data-hsnSac');
+                    const gstRate = this.getAttribute('data-gstRate');
+                    
+                    // Fill the form with selected values
+                    if (name) document.getElementById('charge-name').value = name;
+                    if (type) document.getElementById('charge-type').value = type;
+                    if (hsnSac) document.getElementById('charge-hsn').value = hsnSac;
+                    if (gstRate) document.getElementById('charge-gst').value = gstRate;
+                    
+                    // Hide suggestions
+                    suggestionsContainer.classList.add('hidden');
+                });
+            });
+            
+            suggestionsContainer.classList.remove('hidden');
+        } else {
+            suggestionsContainer.classList.add('hidden');
+        }
+    });
+    
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!suggestionsContainer.contains(e.target) && e.target !== chargeNameInput) {
+            suggestionsContainer.classList.add('hidden');
+        }
+    });
+
     // Add charge button
     document.getElementById('add-charge-btn').onclick = () => {
         const name = document.getElementById('charge-name').value.trim();
@@ -153,12 +240,12 @@ export function openOtherChargesModal(state, callbacks) {
         const type = document.getElementById('charge-type').value;
         
         if (!name) {
-            alert('Please enter a charge name');
+            showToast('Please enter a charge name', 'error');
             return;
         }
         
         if (isNaN(amount) || amount <= 0) {
-            alert('Please enter a valid amount');
+            showToast('Please enter a valid amount', 'error');
             return;
         }
         

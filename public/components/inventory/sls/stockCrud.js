@@ -3,6 +3,8 @@
  * Handles stock create and edit operations
  */
 
+import { showToast } from './toast.js';
+
 export function openCreateStockModal(state, onStockSaved) {
     const subModal = document.getElementById('sub-modal-backdrop');
     const subContent = document.getElementById('sub-modal-content');
@@ -139,10 +141,11 @@ export function openCreateStockModal(state, onStockSaved) {
             
             const result = await response.json();
             console.log('Stock created:', result);
+            showToast('Stock item created successfully!', 'success');
             await onStockSaved(data);
         } catch (err) {
             console.error(err);
-            alert("Error creating stock: " + err.message);
+            showToast("Error creating stock: " + err.message, 'error');
         }
     });
 }
@@ -153,7 +156,7 @@ export function openEditStockModal(stock, state, onStockSaved) {
     if (!subModal || !subContent) return;
 
     if (!stock || !stock.id) {
-        alert('Invalid stock item.');
+        showToast('Invalid stock item.', 'error');
         return;
     }
 
@@ -175,9 +178,14 @@ export function openEditStockModal(stock, state, onStockSaved) {
                 <input type="text" name="item" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none" value="${(stock.item || '').replace(/"/g, '&quot;')}">
             </div>
             
-            <div id="batch-field-container">
+            <div id="batch-field-container" class="col-span-2">
                 <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Batch No</label>
                 <input type="text" name="batch" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none" value="${batchValue.replace(/"/g, '&quot;')}">
+                <input type="hidden" name="selectedBatchIndex" value="">
+            </div>
+            
+            <div id="batch-details" class="col-span-2 hidden p-3 bg-gray-50 rounded text-sm">
+                <p class="text-gray-600">Select a batch to see details</p>
             </div>
             
             <div>
@@ -250,6 +258,11 @@ export function openEditStockModal(stock, state, onStockSaved) {
     document.getElementById('close-sub-modal').onclick = closeModal;
     document.getElementById('cancel-edit-stock').onclick = closeModal;
 
+    // Show batch selection if multiple batches exist
+    if (stock.batches && Array.isArray(stock.batches) && stock.batches.length > 1) {
+        showBatchSelectionForEdit(stock);
+    }
+
     document.getElementById('edit-stock-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
@@ -291,10 +304,103 @@ export function openEditStockModal(stock, state, onStockSaved) {
             
             const result = await response.json();
             console.log('Stock updated:', result);
+            showToast('Stock item updated successfully!', 'success');
             await onStockSaved(stock.id, data);
         } catch (err) {
             console.error(err);
-            alert("Error updating stock: " + err.message);
+            showToast("Error updating stock: " + err.message, 'error');
+        }
+    });
+}
+
+function showBatchSelectionForEdit(stock) {
+    const batchContainer = document.getElementById('batch-field-container');
+    if (!batchContainer) return;
+    
+    // Create the batch selection dropdown
+    const select = document.createElement('select');
+    select.id = 'batch-select';
+    select.name = 'batch-select';
+    select.className = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none mb-2';
+    
+    // Add an option for "Select a batch" as default
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select a batch to edit';
+    defaultOption.disabled = true;
+    defaultOption.selected = true;
+    select.appendChild(defaultOption);
+    
+    // Add options for each batch
+    stock.batches.forEach((batch, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${batch.batch || 'No Batch'} (Qty: ${batch.qty}, Exp: ${batch.expiry || 'N/A'})`;
+        select.appendChild(option);
+    });
+    
+    // Create a container for batch details
+    const detailsContainer = document.getElementById('batch-details');
+    
+    // Create the label
+    const label = document.createElement('label');
+    label.className = 'block text-xs font-bold text-gray-600 mb-1 uppercase';
+    label.textContent = 'Select Batch to Edit';
+    
+    // Clear and rebuild the batch field container
+    batchContainer.innerHTML = '';
+    batchContainer.appendChild(label);
+    batchContainer.appendChild(select);
+    
+    // Add event listener to handle batch selection
+    select.addEventListener('change', function() {
+        const batchIndex = parseInt(this.value);
+        if (!isNaN(batchIndex) && batchIndex >= 0) {
+            const selectedBatch = stock.batches[batchIndex];
+            
+            // Update form fields with selected batch data
+            const form = select.closest('form');
+            if (form) {
+                const batchInput = form.querySelector('input[name="batch"]');
+                if (batchInput) {
+                    batchInput.value = selectedBatch.batch || '';
+                }
+                
+                const mrpInput = form.querySelector('input[name="mrp"]');
+                if (mrpInput) {
+                    mrpInput.value = selectedBatch.mrp || '';
+                }
+                
+                const expiryInput = form.querySelector('input[name="expiryDate"]');
+                if (expiryInput) {
+                    expiryInput.value = selectedBatch.expiry ? selectedBatch.expiry.split('T')[0] : '';
+                }
+                
+                const qtyInput = form.querySelector('input[name="qty"]');
+                if (qtyInput) {
+                    qtyInput.value = selectedBatch.qty || '';
+                }
+                
+                const rateInput = form.querySelector('input[name="rate"]');
+                if (rateInput) {
+                    rateInput.value = selectedBatch.rate || '';
+                }
+                
+                const batchIndexInput = form.querySelector('input[name="selectedBatchIndex"]');
+                if (batchIndexInput) {
+                    batchIndexInput.value = batchIndex;
+                }
+            }
+            
+            // Show batch details
+            detailsContainer.innerHTML = `
+                <div class="font-medium text-gray-800">Selected Batch: ${selectedBatch.batch || 'No Batch'}</div>
+                <div class="text-gray-600">Quantity: ${selectedBatch.qty}</div>
+                <div class="text-gray-600">Rate: ${selectedBatch.rate}</div>
+                <div class="text-gray-600">Expiry: ${selectedBatch.expiry || 'N/A'}</div>
+                <div class="text-gray-600">MRP: ${selectedBatch.mrp || 'N/A'}</div>
+            `;
+            detailsContainer.classList.remove('hidden');
         }
     });
 }

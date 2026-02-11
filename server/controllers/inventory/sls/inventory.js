@@ -1343,18 +1343,31 @@ export const getStockMovements = (req, res) => {
             return res.status(403).json({ error: 'User is not associated with any firm' });
         }
 
-        const { type, batchFilter, searchTerm, page = 1, limit = 50 } = req.query;
+        const { type, batchFilter, searchTerm, page = 1, limit = 50, partyId, stockId } = req.query;
         const offset = (parseInt(page) - 1) * parseInt(limit);
         
         let query = `
-            SELECT sr.*, s.item as stock_item, b.bdate as bill_date
+            SELECT sr.*, s.item as stock_item, b.bdate as bill_date, p.firm as party_name
             FROM stock_reg sr
             LEFT JOIN stocks s ON s.id = sr.stock_id
             LEFT JOIN bills b ON b.id = sr.bill_id
+            LEFT JOIN parties p ON p.id = b.party_id
             WHERE sr.firm_id = ?
         `;
         
         const params = [req.user.firm_id];
+
+        // Filter by party if provided
+        if (partyId) {
+            query += ` AND b.party_id = ?`;
+            params.push(partyId);
+        }
+
+        // Filter by stock if provided
+        if (stockId) {
+            query += ` AND sr.stock_id = ?`;
+            params.push(stockId);
+        }
 
         if (type) {
             query += ` AND sr.type = ?`;
@@ -1494,15 +1507,43 @@ export const getOtherChargesTypes = (req, res) => {
             return res.status(403).json({ error: 'User is not associated with any firm' });
         }
 
+        // Get all bills with other charges for this firm
         const rows = db.prepare(`
-            SELECT DISTINCT json_extract(oth_chg_json, '$[0].type') as type
+            SELECT oth_chg_json
             FROM bills
             WHERE firm_id = ? AND oth_chg_json IS NOT NULL
-            ORDER BY type
+            ORDER BY created_at DESC
+            LIMIT 100
         `).all(req.user.firm_id);
 
-        const types = rows.map(r => r.type).filter(t => t !== null);
-        res.json({ types });
+        // Parse and extract unique charges
+        const chargesMap = new Map();
+        
+        rows.forEach(row => {
+            try {
+                const charges = JSON.parse(row.oth_chg_json);
+                if (Array.isArray(charges)) {
+                    charges.forEach(charge => {
+                        // Use charge name as key to avoid duplicates
+                        const key = charge.name || charge.type;
+                        if (key && !chargesMap.has(key)) {
+                            chargesMap.set(key, {
+                                name: charge.name || charge.type,
+                                type: charge.type || 'other',
+                                hsnSac: charge.hsnSac || '',
+                                gstRate: charge.gstRate || 0
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn('Error parsing oth_chg_json:', e);
+            }
+        });
+
+        // Convert map to array
+        const charges = Array.from(chargesMap.values());
+        res.json({ charges });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

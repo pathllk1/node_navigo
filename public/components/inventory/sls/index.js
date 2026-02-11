@@ -15,6 +15,7 @@ import { openCreateStockModal, openEditStockModal } from './stockCrud.js';
 import { openOtherChargesModal } from './chargesModal.js';
 import { openPartyModal } from './partyModal.js';
 import { openCreatePartyModal } from './partyCreate.js';
+import { showToast } from './toast.js';
 
 export function initSalesSystem() {
     console.log('SLS: Initializing Professional Sales System...');
@@ -378,12 +379,12 @@ export function initSalesSystem() {
         if (saveBtn) {
             saveBtn.onclick = async () => {
                 if (state.cart.length === 0) {
-                    alert('Cannot save an empty invoice. Please add items to the cart.');
+                    showToast('Cannot save an empty invoice. Please add items to the cart.', 'error');
                     return;
                 }
 
                 if (!state.selectedParty) {
-                    alert('Please select a party before saving the invoice.');
+                    showToast('Please select a party before saving the invoice.', 'error');
                     return;
                 }
                 
@@ -409,7 +410,7 @@ export function initSalesSystem() {
                     }
                     
                     const result = await response.json();
-                    alert(`Invoice saved successfully! Bill No: ${result.billNo}`);
+                    showToast(`Invoice saved successfully! Bill No: ${result.billNo}`, 'success');
                     
                     // Reset form
                     clearCart(state);
@@ -417,7 +418,7 @@ export function initSalesSystem() {
                     renderMainLayout();
                 } catch (err) {
                     console.error('Error saving invoice:', err);
-                    alert('Error saving invoice: ' + err.message);
+                    showToast('Error saving invoice: ' + err.message, 'error');
                 }
             };
         }

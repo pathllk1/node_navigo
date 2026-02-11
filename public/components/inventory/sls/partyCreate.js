@@ -4,6 +4,7 @@
  */
 
 import { fetchPartyByGST } from './partyManager.js';
+import { showToast } from './toast.js';
 
 export function openCreatePartyModal(state, onPartySaved) {
     const subModal = document.getElementById('sub-modal-backdrop');
@@ -126,11 +127,12 @@ export function openCreatePartyModal(state, onPartySaved) {
 
             const result = await response.json();
             closeFunc();
+            showToast('Party created successfully!', 'success');
             await onPartySaved(result);
 
         } catch (err) {
             console.error('Error creating party:', err);
-            alert("Error creating party: " + err.message);
+            showToast("Error creating party: " + err.message, 'error');
         }
     });
 }

@@ -74,4 +74,6 @@ export function clearCart(state) {
     state.selectedParty = null;
     state.historyCache = {};
     state.otherCharges = [];
+    state.selectedConsignee = null;  // FIX: Clear consignee data as well
+    state.consigneeSameAsBillTo = true;  // FIX: Reset the toggle to default state
 }
