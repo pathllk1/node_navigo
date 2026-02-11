@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcrypt";
 import { db, Firm, User } from "../utils/db.js";
 import { authenticateJWT, requireRole } from "../middleware/auth.js";
+import * as firmManagementController from "../controllers/firmManagementController.js";
 
 const router = express.Router();
 
@@ -255,5 +256,30 @@ router.get("/stats", authenticateJWT, requireRole('super_admin'), (req, res) => 
     res.status(500).json({ success: false, error: "Failed to fetch stats" });
   }
 });
+
+/* --------------------------------------------------
+   FIRM MANAGEMENT ROUTES - From firmManagementController
+-------------------------------------------------- */
+
+// Create firm (with full details)
+router.post("/firm-management/firms", authenticateJWT, requireRole('super_admin'), firmManagementController.createFirm);
+
+// Get all firms (with full details)
+router.get("/firm-management/firms", authenticateJWT, requireRole('super_admin'), firmManagementController.getAllFirms);
+
+// Get firm by ID
+router.get("/firm-management/firms/:id", authenticateJWT, requireRole('super_admin'), firmManagementController.getFirm);
+
+// Update firm
+router.patch("/firm-management/firms/:id", authenticateJWT, requireRole('super_admin'), firmManagementController.updateFirm);
+
+// Delete firm
+router.delete("/firm-management/firms/:id", authenticateJWT, requireRole('super_admin'), firmManagementController.deleteFirm);
+
+// Assign user to firm
+router.post("/firm-management/assign-user", authenticateJWT, requireRole('super_admin'), firmManagementController.assignUserToFirm);
+
+// Get all users with their assigned firms
+router.get("/firm-management/users-with-firms", authenticateJWT, requireRole('super_admin'), firmManagementController.getAllUsersWithFirms);
 
 export default router;

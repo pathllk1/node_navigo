@@ -16,6 +16,7 @@ import { openOtherChargesModal } from './chargesModal.js';
 import { openPartyModal } from './partyModal.js';
 import { openCreatePartyModal } from './partyCreate.js';
 import { showToast } from './toast.js';
+import { exportInvoiceToPDF } from './invoiceExport.js';
 
 export function initSalesSystem() {
     console.log('SLS: Initializing Professional Sales System...');
@@ -410,6 +411,7 @@ export function initSalesSystem() {
                     }
                     
                     const result = await response.json();
+                    exportInvoiceToPDF(state, formatCurrency);
                     showToast(`Invoice saved successfully! Bill No: ${result.billNo}`, 'success');
                     
                     // Reset form

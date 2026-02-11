@@ -1,26 +1,16 @@
 // Import database
-const turso = require('../../config/turso');
+import { db } from '../utils/db.js';
 
 // Create firm
-exports.createFirm = async (req, res) => {
-    // Validate that admin role is properly configured
-    if (!process.env.ADMIN_ROLE_VALUE) {
-        console.error('CRITICAL ERROR: ADMIN_ROLE_VALUE environment variable is not set');
-        return res.status(500).json({ error: 'Server configuration error' });
-    }
-    
-    const adminRoleValue = parseInt(process.env.ADMIN_ROLE_VALUE);
-    const currentUserResult = await turso.execute({
-        sql: 'SELECT * FROM users WHERE id = ?',
-        args: [req.user.id]
-    });
-    const currentUser = currentUserResult.rows[0];
-    if (!currentUser || !currentUser.role || currentUser.role !== adminRoleValue) {
+export async function createFirm(req, res) {
+    // Validate that user is SUPERADMIN
+    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!currentUser || currentUser.role !== 'super_admin') {
         return res.status(403).json({ error: 'You are not permitted to perform this action' });
     }
     
     try {
-        const { name, legal_name, address, city, state, country, pincode, phone_number, secondary_phone, email, website, business_type, industry_type, establishment_year, employee_count, registration_number, registration_date, cin_number, pan_number, gst_number, tax_id, vat_number, bank_account_number, bank_name, bank_branch, ifsc_code, payment_terms, status, license_numbers, insurance_details, currency, timezone, fiscal_year_start, invoice_prefix, quote_prefix, po_prefix, logo_url, invoice_template, enable_e_invoice } = req.body;
+        const { name, legal_name, address, city, state, country, pincode, phone_number, secondary_phone, email, website, business_type, industry_type, establishment_year, employee_count, registration_number, registration_date, cin_number, pan_number, gst_number, tax_id, vat_number, bank_account_number, bank_name, bank_branch, ifsc_code, payment_terms, status, license_numbers, insurance_details, currency, timezone, fiscal_year_start, invoice_prefix, quote_prefix, po_prefix, logo_url, invoice_template, enable_e_invoice, admin_account } = req.body;
         
         // Convert boolean to integer for enable_e_invoice
         const enableEInvoiceInt = enable_e_invoice === true ? 1 : (enable_e_invoice === false ? 0 : enable_e_invoice);
@@ -31,32 +21,15 @@ exports.createFirm = async (req, res) => {
         }
         
         // Check if firm with same name already exists
-        const existingFirmResult = await turso.execute({
-            sql: 'SELECT * FROM firms WHERE name = ?',
-            args: [name]
-        });
-        const existingFirm = existingFirmResult.rows[0];
+        const existingFirm = db.prepare('SELECT * FROM firms WHERE name = ?').get(name);
         if (existingFirm) {
             return res.status(409).json({ error: 'A firm with this name already exists' });
         }
         
         const now = new Date().toISOString();
         
-        const result = await turso.execute({
-            sql: `
-                INSERT INTO firms (
-                    name, legal_name, address, city, state, country, pincode,
-                    phone_number, secondary_phone, email, website, business_type, industry_type,
-                    establishment_year, employee_count, registration_number, registration_date,
-                    cin_number, pan_number, gst_number, tax_id, vat_number,
-                    bank_account_number, bank_name, bank_branch, ifsc_code, payment_terms,
-                    status, license_numbers, insurance_details, currency, timezone,
-                    fiscal_year_start, invoice_prefix, quote_prefix, po_prefix,
-                    logo_url, invoice_template, enable_e_invoice,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-            args: [
+        const result = db.prepare(`
+            INSERT INTO firms (
                 name, legal_name, address, city, state, country, pincode,
                 phone_number, secondary_phone, email, website, business_type, industry_type,
                 establishment_year, employee_count, registration_number, registration_date,
@@ -64,127 +37,125 @@ exports.createFirm = async (req, res) => {
                 bank_account_number, bank_name, bank_branch, ifsc_code, payment_terms,
                 status, license_numbers, insurance_details, currency, timezone,
                 fiscal_year_start, invoice_prefix, quote_prefix, po_prefix,
-                logo_url, invoice_template, enableEInvoiceInt,
-                now, now
-            ]
-        });
+                logo_url, invoice_template, enable_e_invoice,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            name, legal_name, address, city, state, country, pincode,
+            phone_number, secondary_phone, email, website, business_type, industry_type,
+            establishment_year, employee_count, registration_number, registration_date,
+            cin_number, pan_number, gst_number, tax_id, vat_number,
+            bank_account_number, bank_name, bank_branch, ifsc_code, payment_terms,
+            status, license_numbers, insurance_details, currency, timezone,
+            fiscal_year_start, invoice_prefix, quote_prefix, po_prefix,
+            logo_url, invoice_template, enableEInvoiceInt,
+            now, now
+        );
+        
+        const firmId = result.lastInsertRowid;
+        let message = 'Firm created successfully';
+        
+        // Create admin account if provided
+        if (admin_account && (admin_account.fullname || admin_account.username || admin_account.email || admin_account.password)) {
+            try {
+                const { fullname, username, email: adminEmail, password } = admin_account;
+                
+                // Validate admin account fields
+                if (!fullname || !username || !adminEmail || !password) {
+                    return res.status(400).json({ error: 'All admin account fields are required when creating admin user' });
+                }
+                
+                // Check if username already exists
+                const existingUser = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+                if (existingUser) {
+                    return res.status(409).json({ error: 'Username already exists' });
+                }
+                
+                // Check if email already exists
+                const existingEmail = db.prepare('SELECT * FROM users WHERE email = ?').get(adminEmail);
+                if (existingEmail) {
+                    return res.status(409).json({ error: 'Email already exists' });
+                }
+                
+                // Hash password (using simple hash for now - in production use bcrypt)
+                const crypto = await import('crypto');
+                const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+                
+                // Create admin user
+                db.prepare(`
+                    INSERT INTO users (
+                        fullname, username, email, password, role, firm_id, status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                    fullname, username, adminEmail, hashedPassword, 'admin', firmId, 'approved', now, now
+                );
+                
+                message = 'Firm and admin account created successfully';
+            } catch (adminErr) {
+                console.error('Error creating admin account:', adminErr.message);
+                // Firm was created, but admin account creation failed
+                return res.status(500).json({ 
+                    error: 'Firm created but admin account creation failed',
+                    details: adminErr.message
+                });
+            }
+        }
         
         res.status(201).json({ 
-            message: 'Firm created successfully', 
-            firmId: Number(result.lastInsertRowid) 
+            message, 
+            firmId
         });
     } catch (err) {
         console.error('Error creating firm:', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
-};
+}
 
 // Get all firms
-exports.getAllFirms = async (req, res) => {
-    // Validate that admin role is properly configured
-    if (!process.env.ADMIN_ROLE_VALUE) {
-        console.error('CRITICAL ERROR: ADMIN_ROLE_VALUE environment variable is not set');
-        return res.status(500).json({ error: 'Server configuration error' });
-    }
-    
-    const adminRoleValue = parseInt(process.env.ADMIN_ROLE_VALUE);
-    const currentUserResult = await turso.execute({
-        sql: 'SELECT * FROM users WHERE id = ?',
-        args: [req.user.id]
-    });
-    const currentUser = currentUserResult.rows[0];
-    if (!currentUser || !currentUser.role || currentUser.role !== adminRoleValue) {
+export function getAllFirms(req, res) {
+    // Validate that user is SUPERADMIN
+    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!currentUser || currentUser.role !== 'super_admin') {
         return res.status(403).json({ error: 'You are not permitted to perform this action' });
     }
     
     try {
-        const firmsResult = await turso.execute({
-            sql: 'SELECT * FROM firms ORDER BY created_at DESC'
-        });
-        const firms = firmsResult.rows;
-        
-        // Convert BigInt values to numbers in firms
-        const processedFirms = firms.map(firm => {
-            const processedFirm = {};
-            for (const [key, value] of Object.entries(firm)) {
-                if (typeof value === 'bigint') {
-                    processedFirm[key] = Number(value);
-                } else {
-                    processedFirm[key] = value;
-                }
-            }
-            return processedFirm;
-        });
-        
-        res.json({ firms: processedFirms });
+        const firms = db.prepare('SELECT * FROM firms ORDER BY created_at DESC').all();
+        res.json({ firms });
     } catch (err) {
         console.error('Error fetching firms:', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
-};
+}
 
 // Get firm by ID
-exports.getFirm = async (req, res) => {
-    // Validate that admin role is properly configured
-    if (!process.env.ADMIN_ROLE_VALUE) {
-        console.error('CRITICAL ERROR: ADMIN_ROLE_VALUE environment variable is not set');
-        return res.status(500).json({ error: 'Server configuration error' });
-    }
-    
-    const adminRoleValue = parseInt(process.env.ADMIN_ROLE_VALUE);
-    const currentUserResult = await turso.execute({
-        sql: 'SELECT * FROM users WHERE id = ?',
-        args: [req.user.id]
-    });
-    const currentUser = currentUserResult.rows[0];
-    if (!currentUser || !currentUser.role || currentUser.role !== adminRoleValue) {
+export function getFirm(req, res) {
+    // Validate that user is SUPERADMIN
+    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!currentUser || currentUser.role !== 'super_admin') {
         return res.status(403).json({ error: 'You are not permitted to perform this action' });
     }
     
     try {
         const { id } = req.params;
-        const firmResult = await turso.execute({
-            sql: 'SELECT * FROM firms WHERE id = ?',
-            args: [id]
-        });
-        const firm = firmResult.rows[0];
+        const firm = db.prepare('SELECT * FROM firms WHERE id = ?').get(id);
         
         if (!firm) {
             return res.status(404).json({ error: 'Firm not found' });
         }
         
-        // Convert BigInt values to numbers in firm
-        const processedFirm = {};
-        for (const [key, value] of Object.entries(firm)) {
-            if (typeof value === 'bigint') {
-                processedFirm[key] = Number(value);
-            } else {
-                processedFirm[key] = value;
-            }
-        }
-        
-        res.json({ firm: processedFirm });
+        res.json({ firm });
     } catch (err) {
         console.error('Error fetching firm:', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
-};
+}
 
 // Update firm
-exports.updateFirm = async (req, res) => {
-    // Validate that admin role is properly configured
-    if (!process.env.ADMIN_ROLE_VALUE) {
-        console.error('CRITICAL ERROR: ADMIN_ROLE_VALUE environment variable is not set');
-        return res.status(500).json({ error: 'Server configuration error' });
-    }
-    
-    const adminRoleValue = parseInt(process.env.ADMIN_ROLE_VALUE);
-    const currentUserResult = await turso.execute({
-        sql: 'SELECT * FROM users WHERE id = ?',
-        args: [req.user.id]
-    });
-    const currentUser = currentUserResult.rows[0];
-    if (!currentUser || !currentUser.role || currentUser.role !== adminRoleValue) {
+export function updateFirm(req, res) {
+    // Validate that user is SUPERADMIN
+    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!currentUser || currentUser.role !== 'super_admin') {
         return res.status(403).json({ error: 'You are not permitted to perform this action' });
     }
     
@@ -196,22 +167,14 @@ exports.updateFirm = async (req, res) => {
         const enableEInvoiceInt = enable_e_invoice === true ? 1 : (enable_e_invoice === false ? 0 : enable_e_invoice);
         
         // Check if firm exists
-        const existingFirmResult = await turso.execute({
-            sql: 'SELECT * FROM firms WHERE id = ?',
-            args: [id]
-        });
-        const existingFirm = existingFirmResult.rows[0];
+        const existingFirm = db.prepare('SELECT * FROM firms WHERE id = ?').get(id);
         if (!existingFirm) {
             return res.status(404).json({ error: 'Firm not found' });
         }
         
         // Check if another firm with same name exists (excluding current firm)
         if (name) {
-            const sameNameFirmResult = await turso.execute({
-                sql: 'SELECT * FROM firms WHERE name = ? AND id != ?',
-                args: [name, id]
-            });
-            const sameNameFirm = sameNameFirmResult.rows[0];
+            const sameNameFirm = db.prepare('SELECT * FROM firms WHERE name = ? AND id != ?').get(name, id);
             if (sameNameFirm) {
                 return res.status(409).json({ error: 'Another firm with this name already exists' });
             }
@@ -219,97 +182,94 @@ exports.updateFirm = async (req, res) => {
         
         const now = new Date().toISOString();
         
-        const result = await turso.execute({
-            sql: `
-                UPDATE firms 
-                SET name = COALESCE(?, name), 
-                    legal_name = COALESCE(?, legal_name),
-                    address = COALESCE(?, address),
-                    city = COALESCE(?, city),
-                    state = COALESCE(?, state),
-                    country = COALESCE(?, country),
-                    pincode = COALESCE(?, pincode),
-                    phone_number = COALESCE(?, phone_number),
-                    secondary_phone = COALESCE(?, secondary_phone),
-                    email = COALESCE(?, email),
-                    website = COALESCE(?, website),
-                    business_type = COALESCE(?, business_type),
-                    industry_type = COALESCE(?, industry_type),
-                    establishment_year = COALESCE(?, establishment_year),
-                    employee_count = COALESCE(?, employee_count),
-                    registration_number = COALESCE(?, registration_number),
-                    registration_date = COALESCE(?, registration_date),
-                    cin_number = COALESCE(?, cin_number),
-                    pan_number = COALESCE(?, pan_number),
-                    gst_number = COALESCE(?, gst_number),
-                    tax_id = COALESCE(?, tax_id),
-                    vat_number = COALESCE(?, vat_number),
-                    bank_account_number = COALESCE(?, bank_account_number),
-                    bank_name = COALESCE(?, bank_name),
-                    bank_branch = COALESCE(?, bank_branch),
-                    ifsc_code = COALESCE(?, ifsc_code),
-                    payment_terms = COALESCE(?, payment_terms),
-                    status = COALESCE(?, status),
-                    license_numbers = COALESCE(?, license_numbers),
-                    insurance_details = COALESCE(?, insurance_details),
-                    currency = COALESCE(?, currency),
-                    timezone = COALESCE(?, timezone),
-                    fiscal_year_start = COALESCE(?, fiscal_year_start),
-                    invoice_prefix = COALESCE(?, invoice_prefix),
-                    quote_prefix = COALESCE(?, quote_prefix),
-                    po_prefix = COALESCE(?, po_prefix),
-                    logo_url = COALESCE(?, logo_url),
-                    invoice_template = COALESCE(?, invoice_template),
-                    enable_e_invoice = COALESCE(?, enable_e_invoice),
-                    updated_at = ?
-                WHERE id = ?
-            `,
-            args: [
-                name, 
-                legal_name, 
-                address, 
-                city, 
-                state, 
-                country, 
-                pincode, 
-                phone_number, 
-                secondary_phone, 
-                email, 
-                website, 
-                business_type, 
-                industry_type, 
-                establishment_year, 
-                employee_count, 
-                registration_number, 
-                registration_date, 
-                cin_number, 
-                pan_number, 
-                gst_number, 
-                tax_id, 
-                vat_number, 
-                bank_account_number, 
-                bank_name, 
-                bank_branch, 
-                ifsc_code, 
-                payment_terms, 
-                status, 
-                license_numbers, 
-                insurance_details, 
-                currency, 
-                timezone, 
-                fiscal_year_start, 
-                invoice_prefix, 
-                quote_prefix, 
-                po_prefix, 
-                logo_url, 
-                invoice_template, 
-                enableEInvoiceInt, 
-                now, 
-                id
-            ]
-        });
+        const result = db.prepare(`
+            UPDATE firms 
+            SET name = COALESCE(?, name), 
+                legal_name = COALESCE(?, legal_name),
+                address = COALESCE(?, address),
+                city = COALESCE(?, city),
+                state = COALESCE(?, state),
+                country = COALESCE(?, country),
+                pincode = COALESCE(?, pincode),
+                phone_number = COALESCE(?, phone_number),
+                secondary_phone = COALESCE(?, secondary_phone),
+                email = COALESCE(?, email),
+                website = COALESCE(?, website),
+                business_type = COALESCE(?, business_type),
+                industry_type = COALESCE(?, industry_type),
+                establishment_year = COALESCE(?, establishment_year),
+                employee_count = COALESCE(?, employee_count),
+                registration_number = COALESCE(?, registration_number),
+                registration_date = COALESCE(?, registration_date),
+                cin_number = COALESCE(?, cin_number),
+                pan_number = COALESCE(?, pan_number),
+                gst_number = COALESCE(?, gst_number),
+                tax_id = COALESCE(?, tax_id),
+                vat_number = COALESCE(?, vat_number),
+                bank_account_number = COALESCE(?, bank_account_number),
+                bank_name = COALESCE(?, bank_name),
+                bank_branch = COALESCE(?, bank_branch),
+                ifsc_code = COALESCE(?, ifsc_code),
+                payment_terms = COALESCE(?, payment_terms),
+                status = COALESCE(?, status),
+                license_numbers = COALESCE(?, license_numbers),
+                insurance_details = COALESCE(?, insurance_details),
+                currency = COALESCE(?, currency),
+                timezone = COALESCE(?, timezone),
+                fiscal_year_start = COALESCE(?, fiscal_year_start),
+                invoice_prefix = COALESCE(?, invoice_prefix),
+                quote_prefix = COALESCE(?, quote_prefix),
+                po_prefix = COALESCE(?, po_prefix),
+                logo_url = COALESCE(?, logo_url),
+                invoice_template = COALESCE(?, invoice_template),
+                enable_e_invoice = COALESCE(?, enable_e_invoice),
+                updated_at = ?
+            WHERE id = ?
+        `).run(
+            name, 
+            legal_name, 
+            address, 
+            city, 
+            state, 
+            country, 
+            pincode, 
+            phone_number, 
+            secondary_phone, 
+            email, 
+            website, 
+            business_type, 
+            industry_type, 
+            establishment_year, 
+            employee_count, 
+            registration_number, 
+            registration_date, 
+            cin_number, 
+            pan_number, 
+            gst_number, 
+            tax_id, 
+            vat_number, 
+            bank_account_number, 
+            bank_name, 
+            bank_branch, 
+            ifsc_code, 
+            payment_terms, 
+            status, 
+            license_numbers, 
+            insurance_details, 
+            currency, 
+            timezone, 
+            fiscal_year_start, 
+            invoice_prefix, 
+            quote_prefix, 
+            po_prefix, 
+            logo_url, 
+            invoice_template, 
+            enableEInvoiceInt, 
+            now, 
+            id
+        );
         
-        if (result.rowsAffected === 0) {
+        if (result.changes === 0) {
             return res.status(400).json({ error: 'No changes made to firm' });
         }
         
@@ -318,23 +278,13 @@ exports.updateFirm = async (req, res) => {
         console.error('Error updating firm:', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
-};
+}
 
 // Delete firm
-exports.deleteFirm = async (req, res) => {
-    // Validate that admin role is properly configured
-    if (!process.env.ADMIN_ROLE_VALUE) {
-        console.error('CRITICAL ERROR: ADMIN_ROLE_VALUE environment variable is not set');
-        return res.status(500).json({ error: 'Server configuration error' });
-    }
-    
-    const adminRoleValue = parseInt(process.env.ADMIN_ROLE_VALUE);
-    const currentUserResult = await turso.execute({
-        sql: 'SELECT * FROM users WHERE id = ?',
-        args: [req.user.id]
-    });
-    const currentUser = currentUserResult.rows[0];
-    if (!currentUser || !currentUser.role || currentUser.role !== adminRoleValue) {
+export function deleteFirm(req, res) {
+    // Validate that user is SUPERADMIN
+    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!currentUser || currentUser.role !== 'super_admin') {
         return res.status(403).json({ error: 'You are not permitted to perform this action' });
     }
     
@@ -342,61 +292,37 @@ exports.deleteFirm = async (req, res) => {
         const { id } = req.params;
         
         // Check if firm exists
-        const existingFirmResult = await turso.execute({
-            sql: 'SELECT * FROM firms WHERE id = ?',
-            args: [id]
-        });
-        const existingFirm = existingFirmResult.rows[0];
+        const existingFirm = db.prepare('SELECT * FROM firms WHERE id = ?').get(id);
         if (!existingFirm) {
             return res.status(404).json({ error: 'Firm not found' });
         }
         
         // Check if firm has associated users
-        const firmUsersResult = await turso.execute({
-            sql: 'SELECT COUNT(*) as count FROM users WHERE firm_id = ?',
-            args: [id]
-        });
-        const firmUsers = firmUsersResult.rows[0];
-        if (firmUsers.count > 0) {
+        const firmUsersCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE firm_id = ?').get(id);
+        if (firmUsersCount.count > 0) {
             return res.status(400).json({ error: 'Cannot delete firm with associated users. Remove users first.' });
         }
         
         // Check if firm has associated data (stocks, bills, parties, etc.)
-        const firmStocksResult = await turso.execute({
-            sql: 'SELECT COUNT(*) as count FROM stocks WHERE firm_id = ?',
-            args: [id]
-        });
-        const firmBillsResult = await turso.execute({
-            sql: 'SELECT COUNT(*) as count FROM bills WHERE firm_id = ?',
-            args: [id]
-        });
-        const firmPartiesResult = await turso.execute({
-            sql: 'SELECT COUNT(*) as count FROM parties WHERE firm_id = ?',
-            args: [id]
-        });
+        const firmStocksCount = db.prepare('SELECT COUNT(*) as count FROM stocks WHERE firm_id = ?').get(id);
+        const firmBillsCount = db.prepare('SELECT COUNT(*) as count FROM bills WHERE firm_id = ?').get(id);
+        const firmPartiesCount = db.prepare('SELECT COUNT(*) as count FROM parties WHERE firm_id = ?').get(id);
         
-        const firmStocks = firmStocksResult.rows[0];
-        const firmBills = firmBillsResult.rows[0];
-        const firmParties = firmPartiesResult.rows[0];
-        
-        if (firmStocks.count > 0 || firmBills.count > 0 || firmParties.count > 0) {
+        if (firmStocksCount.count > 0 || firmBillsCount.count > 0 || firmPartiesCount.count > 0) {
             return res.status(400).json({ 
                 error: 'Cannot delete firm with associated data. Remove all related data first.',
                 details: {
-                    stocks: firmStocks.count,
-                    bills: firmBills.count,
-                    parties: firmParties.count
+                    stocks: firmStocksCount.count,
+                    bills: firmBillsCount.count,
+                    parties: firmPartiesCount.count
                 }
             });
         }
         
         // Delete the firm
-        const result = await turso.execute({
-            sql: 'DELETE FROM firms WHERE id = ?',
-            args: [id]
-        });
+        const result = db.prepare('DELETE FROM firms WHERE id = ?').run(id);
         
-        if (result.rowsAffected === 0) {
+        if (result.changes === 0) {
             return res.status(400).json({ error: 'No firm was deleted' });
         }
         
@@ -405,23 +331,13 @@ exports.deleteFirm = async (req, res) => {
         console.error('Error deleting firm:', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
-};
+}
 
 // Assign user to firm
-exports.assignUserToFirm = async (req, res) => {
-    // Validate that admin role is properly configured
-    if (!process.env.ADMIN_ROLE_VALUE) {
-        console.error('CRITICAL ERROR: ADMIN_ROLE_VALUE environment variable is not set');
-        return res.status(500).json({ error: 'Server configuration error' });
-    }
-    
-    const adminRoleValue = parseInt(process.env.ADMIN_ROLE_VALUE);
-    const currentUserResult = await turso.execute({
-        sql: 'SELECT * FROM users WHERE id = ?',
-        args: [req.user.id]
-    });
-    const currentUser = currentUserResult.rows[0];
-    if (!currentUser || !currentUser.role || currentUser.role !== adminRoleValue) {
+export function assignUserToFirm(req, res) {
+    // Validate that user is SUPERADMIN
+    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!currentUser || currentUser.role !== 'super_admin') {
         return res.status(403).json({ error: 'You are not permitted to perform this action' });
     }
     
@@ -434,43 +350,27 @@ exports.assignUserToFirm = async (req, res) => {
         }
         
         // Check if user exists
-        const userResult = await turso.execute({
-            sql: 'SELECT * FROM users WHERE id = ?',
-            args: [userId]
-        });
-        const user = userResult.rows[0];
+        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
         
         // Check if firm exists
-        const firmResult = await turso.execute({
-            sql: 'SELECT * FROM firms WHERE id = ?',
-            args: [firmId]
-        });
-        const firm = firmResult.rows[0];
+        const firm = db.prepare('SELECT * FROM firms WHERE id = ?').get(firmId);
         if (!firm) {
             return res.status(404).json({ error: 'Firm not found' });
         }
         
         // Check if user is already assigned to a different firm
-        const currentUserFirmResult = await turso.execute({
-            sql: 'SELECT firm_id FROM users WHERE id = ?',
-            args: [userId]
-        });
-        const currentUserFirm = currentUserFirmResult.rows[0];
+        const currentUserFirm = db.prepare('SELECT firm_id FROM users WHERE id = ?').get(userId);
         if (currentUserFirm.firm_id && currentUserFirm.firm_id != firmId) {
-            // If user is already assigned to another firm, we might want to confirm the reassignment
             console.log(`User ${userId} was previously assigned to firm ${currentUserFirm.firm_id}, reassigning to ${firmId}`);
         }
         
         // Assign user to firm
-        const result = await turso.execute({
-            sql: 'UPDATE users SET firm_id = ? WHERE id = ?',
-            args: [firmId, userId]
-        });
+        const result = db.prepare('UPDATE users SET firm_id = ? WHERE id = ?').run(firmId, userId);
         
-        if (result.rowsAffected === 0) {
+        if (result.changes === 0) {
             return res.status(400).json({ error: 'Failed to assign user to firm' });
         }
         
@@ -479,59 +379,33 @@ exports.assignUserToFirm = async (req, res) => {
         console.error('Error assigning user to firm:', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
-};
+}
 
 // Get all users with their assigned firms
-exports.getAllUsersWithFirms = async (req, res) => {
-    // Validate that admin role is properly configured
-    if (!process.env.ADMIN_ROLE_VALUE) {
-        console.error('CRITICAL ERROR: ADMIN_ROLE_VALUE environment variable is not set');
-        return res.status(500).json({ error: 'Server configuration error' });
-    }
-    
-    const adminRoleValue = parseInt(process.env.ADMIN_ROLE_VALUE);
-    const currentUserResult = await turso.execute({
-        sql: 'SELECT * FROM users WHERE id = ?',
-        args: [req.user.id]
-    });
-    const currentUser = currentUserResult.rows[0];
-    if (!currentUser || !currentUser.role || currentUser.role !== adminRoleValue) {
+export function getAllUsersWithFirms(req, res) {
+    // Validate that user is SUPERADMIN
+    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!currentUser || currentUser.role !== 'super_admin') {
         return res.status(403).json({ error: 'You are not permitted to perform this action' });
     }
     
     try {
-        const usersResult = await turso.execute({
-            sql: `
-                SELECT 
-                    u.id,
-                    u.fullname,
-                    u.username,
-                    u.email,
-                    u.firm_id,
-                    f.name as firm_name
-                FROM users u
-                LEFT JOIN firms f ON u.firm_id = f.id
-                ORDER BY u.fullname ASC
-            `
-        });
-        const users = usersResult.rows;
+        const users = db.prepare(`
+            SELECT 
+                u.id,
+                u.fullname,
+                u.username,
+                u.email,
+                u.firm_id,
+                f.name as firm_name
+            FROM users u
+            LEFT JOIN firms f ON u.firm_id = f.id
+            ORDER BY u.fullname ASC
+        `).all();
         
-        // Convert BigInt values to numbers in users
-        const processedUsers = users.map(user => {
-            const processedUser = {};
-            for (const [key, value] of Object.entries(user)) {
-                if (typeof value === 'bigint') {
-                    processedUser[key] = Number(value);
-                } else {
-                    processedUser[key] = value;
-                }
-            }
-            return processedUser;
-        });
-        
-        res.json({ users: processedUsers });
+        res.json({ users });
     } catch (err) {
         console.error('Error fetching users with firms:', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
-};
+}
