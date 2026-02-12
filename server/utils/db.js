@@ -1,6 +1,6 @@
 'use strict';
 
-import Database from 'better-sqlite3';
+import Database from 'libsql'; 
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -14,6 +14,7 @@ const __dirname = path.dirname(__filename);
 // database file at: server/data.sqlite
 const dbPath = path.join(__dirname, '..', 'data.sqlite');
 
+// 2. The constructor remains the same for local files
 export const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');

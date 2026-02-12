@@ -1,7 +1,13 @@
-const PdfPrinter = require('pdfmake/js/Printer').default;
-const path = require('path');
-const fs = require('fs');
-const turso = require('../../../config/turso');
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { Bill, StockReg } from '../../utils/db.js';
+import PrinterModule from 'pdfmake/js/Printer.js';
+
+const PdfPrinter = PrinterModule.default;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Function to resolve font paths properly on different platforms
 const getFontPath = (fileName) => {
@@ -136,24 +142,24 @@ const numberToWords = (num) => {
 };
 
 const getInvoiceTypeLabel = (bill) => {
-    if (bill.transactionType) {
-        const transactionType = bill.transactionType.toUpperCase();
-        switch(transactionType) {
-            case 'SALE': return 'SALES INVOICE';
+    if (bill.btype) {
+        const billType = bill.btype.toUpperCase();
+        switch(billType) {
+            case 'SALES': return 'SALES INVOICE';
             case 'PURCHASE': return 'PURCHASE INVOICE';
             case 'CREDIT NOTE': return 'CREDIT NOTE';
             case 'DEBIT NOTE': return 'DEBIT NOTE';
             case 'DELIVERY NOTE': return 'DELIVERY NOTE';
-            default: return transactionType;
+            default: return billType;
         }
     }
     return 'SALES INVOICE';
 };
 
 const getPartyLabels = (bill) => {
-    const type = bill.transactionType?.toUpperCase() || 'SALE';
+    const type = bill.btype?.toUpperCase() || 'SALES';
     switch(type) {
-        case 'SALE': return { billTo: 'Bill To (Buyer)', shipTo: 'Ship To (Consignee)' };
+        case 'SALES': return { billTo: 'Bill To (Buyer)', shipTo: 'Ship To (Consignee)' };
         case 'PURCHASE': return { billTo: 'Bill From (Supplier)', shipTo: 'Bill To (Receiver)' };
         case 'CREDIT NOTE': return { billTo: 'Bill To (Recipient)', shipTo: 'Ship To (Consignee)' };
         case 'DEBIT NOTE': return { billTo: 'Bill From (Supplier)', shipTo: 'Bill To (Recipient)' };
@@ -163,7 +169,7 @@ const getPartyLabels = (bill) => {
 };
 
 const getBillType = (bill) => {
-    const billTypeSource = (bill.btype || bill.billType || '').toString().toLowerCase();
+    const billTypeSource = (bill.btype || '').toString().toLowerCase();
     if (billTypeSource.includes('intra')) return 'intra-state';
     if (billTypeSource.includes('inter')) return 'inter-state';
     const cgst = Number(bill.cgst) || 0;
@@ -222,109 +228,46 @@ const buildHsnSummary = (bill, items, otherCharges, gstEnabled) => {
     return Array.from(hsnMap.values()).sort((a, b) => a.hsn.localeCompare(b.hsn));
 };
 
-exports.getBillPdf = async (req, res) => {
+export const generateInvoicePDF = async (req, res) => {
     try {
-        const { id } = req.params;
-        if (!id) return res.status(400).json({ error: 'Bill ID is required' });
+        const billId = req.params.id;
+        console.log('PDF Request - billId:', billId);
+        if (!billId) return res.status(400).json({ error: 'Bill ID is required' });
 
-        const billQuery = await turso.execute({
-            sql: `
-                SELECT b.*, sr.type as transactionType
-                FROM bills b
-                LEFT JOIN (
-                    SELECT bill_id, type, MIN(id) as min_id FROM stock_reg GROUP BY bill_id
-                ) sr ON b.id = sr.bill_id
-                WHERE b.id = ?
-            `,
-            args: [id]
-        });
-        const bill = billQuery.rows[0];
+        // Get firm_id from authenticated user
+        const firmId = req.user?.firm_id;
+        console.log('PDF Request - firmId:', firmId);
+        if (!firmId) return res.status(401).json({ error: 'Unauthorized - No firm associated' });
 
+        const bill = Bill.getById.get(billId, firmId);
+        console.log('PDF Request - bill found:', !!bill);
         if (!bill) return res.status(404).json({ error: 'Bill not found' });
 
-        // Convert BigInt values to numbers in bill
-        const processedBill = {};
-        for (const [key, value] of Object.entries(bill)) {
-            if (typeof value === 'bigint') {
-                processedBill[key] = Number(value);
-            } else {
-                processedBill[key] = value;
-            }
-        }
-
-        const itemsResult = await turso.execute({
-            sql: 'SELECT *, item_narration FROM stock_reg WHERE bill_id = ? ORDER BY created_at',
-            args: [id]
-        });
-        
-        // Convert BigInt values to numbers in items
-        const items = itemsResult.rows.map(item => {
-            const processedItem = {};
-            for (const [key, value] of Object.entries(item)) {
-                if (typeof value === 'bigint') {
-                    processedItem[key] = Number(value);
-                } else {
-                    processedItem[key] = value;
-                }
-            }
-            return processedItem;
-        });
+        const items = StockReg.getByBillId.all(billId, firmId);
         
         let otherCharges = [];
-        if (processedBill.oth_chg_json) {
-            try { otherCharges = JSON.parse(processedBill.oth_chg_json) || []; } catch (e) { otherCharges = []; }
+        if (bill.oth_chg_json) {
+            try { otherCharges = JSON.parse(bill.oth_chg_json) || []; } catch (e) { otherCharges = []; }
         }
 
-        // Fetch GST settings
-        let gstEnabled = true;
-        if (req.user && req.user.firm_id) {
-            const firmGstSettingResult = await turso.execute({
-                sql: 'SELECT setting_value FROM firm_settings WHERE firm_id = ? AND setting_key = ?',
-                args: [req.user.firm_id, 'gst_enabled']
-            });
-            const firmGstSetting = firmGstSettingResult.rows[0];
-            if (firmGstSetting) gstEnabled = JSON.parse(firmGstSetting.setting_value);
-            else {
-                const globalGstResult = await turso.execute({
-                    sql: 'SELECT setting_value FROM settings WHERE setting_key = ?',
-                    args: ['gst_enabled']
-                });
-                const globalGst = globalGstResult.rows[0];
-                gstEnabled = globalGst ? JSON.parse(globalGst.setting_value) : true;
-            }
-        }
+        // GST is enabled by default
+        const gstEnabled = true;
 
-        // Fetch Seller Info
-        let seller = { name: 'Company Name', address: 'Address', gstin: '' };
-        if (req.user && req.user.firm_id) {
-            const firmResult = await turso.execute({
-                sql: 'SELECT name, address, gst_number FROM firms WHERE id = ?',
-                args: [req.user.firm_id]
-            });
-            const firm = firmResult.rows[0];
-            if (firm) {
-                seller = { name: firm.name, address: firm.address, gstin: firm.gst_number || '' };
-            }
-        }
+        // Seller info - using bill firm name as placeholder
+        const seller = { name: bill.firm || 'Company Name', address: 'Address', gstin: bill.gstin || '' };
 
-        const billType = getBillType(processedBill);
-        const partyLabels = getPartyLabels(processedBill);
-        const hsnSummary = buildHsnSummary(processedBill, items, otherCharges, gstEnabled);
+        const billType = getBillType(bill);
+        const partyLabels = getPartyLabels(bill);
+        const hsnSummary = buildHsnSummary(bill, items, otherCharges, gstEnabled);
         
-        // Use state codes and PINs directly from the database
-        // The bills table now contains pin and state_code copied from parties table
-        const buyerStateCode = processedBill.state_code;  // Direct numeric state code from database
-        const consigneeStateCode = processedBill.consignee_state_code || processedBill.state_code;  // Use consignee state code or fall back to main state code
+        const formattedBuyerAddress = bill.addr && bill.pin ? `${bill.addr}, PIN: ${bill.pin}` : (bill.addr || `PIN: ${bill.pin}`);
+        const formattedConsigneeAddress = (bill.consignee_address || bill.addr) && (bill.consignee_pin || bill.pin) ? 
+            `${bill.consignee_address || bill.addr}, PIN: ${bill.consignee_pin || bill.pin}` : 
+            ((bill.consignee_address || bill.addr) || `PIN: ${bill.consignee_pin || bill.pin}`);
         
-        // Format addresses with PIN codes using direct database values
-        const formattedBuyerAddress = processedBill.addr && processedBill.pin ? `${processedBill.addr}, PIN: ${processedBill.pin}` : (processedBill.addr || `PIN: ${processedBill.pin}`);
-        const formattedConsigneeAddress = (processedBill.consignee_address || processedBill.addr) && (processedBill.consignee_pin || processedBill.pin) ? 
-            `${processedBill.consignee_address || processedBill.addr}, PIN: ${processedBill.consignee_pin || processedBill.pin}` : 
-            ((processedBill.consignee_address || processedBill.addr) || `PIN: ${processedBill.consignee_pin || processedBill.pin}`);
-        
-        const taxableValue = processedBill.gtot || 0;
-        const totalTax = gstEnabled ? ((processedBill.cgst || 0) + (processedBill.sgst || 0) + (processedBill.igst || 0)) : 0;
-        const grandTotal = gstEnabled ? (processedBill.ntot || 0) : taxableValue;
+        const taxableValue = bill.gtot || 0;
+        const totalTax = gstEnabled ? ((bill.cgst || 0) + (bill.sgst || 0) + (bill.igst || 0)) : 0;
+        const grandTotal = gstEnabled ? (bill.ntot || 0) : taxableValue;
         const roundedGrandTotal = Math.round(grandTotal);
         const roundOff = roundedGrandTotal - grandTotal;
         
@@ -342,7 +285,7 @@ exports.getBillPdf = async (req, res) => {
                         {
                             width: '*',
                             stack: [
-                                { text: getInvoiceTypeLabel(processedBill), style: 'title' },
+                                { text: getInvoiceTypeLabel(bill), style: 'title' },
                                 { text: gstEnabled ? 'Invoice under GST' : 'Invoice (GST Disabled)', style: 'subtitle' },
                                 { text: seller.name, style: 'sellerName', margin: [0, 10, 0, 2] },
                                 { text: seller.address, style: 'sellerMeta' },
@@ -354,11 +297,11 @@ exports.getBillPdf = async (req, res) => {
                             table: {
                                 widths: ['*', '*'],
                                 body: [
-                                    [{ text: 'Invoice No:', style: 'label' }, { text: processedBill.bno || '', style: 'value' }],
-                                    [{ text: 'Date:', style: 'label' }, { text: formatDate(processedBill.bdate) || '', style: 'value' }],
-                                    ...(processedBill.order_no ? [[{ text: 'PO No:', style: 'label' }, { text: processedBill.order_no, style: 'value' }]] : []),
-                                    ...(processedBill.vehicle_no ? [[{ text: 'Vehicle No:', style: 'label' }, { text: processedBill.vehicle_no, style: 'value' }]] : []),
-                                    ...(processedBill.dispatch_through ? [[{ text: 'Dispatch Through:', style: 'label' }, { text: processedBill.dispatch_through, style: 'value' }]] : [])
+                                    [{ text: 'Invoice No:', style: 'label' }, { text: bill.bno || '', style: 'value' }],
+                                    [{ text: 'Date:', style: 'label' }, { text: formatDate(bill.bdate) || '', style: 'value' }],
+                                    ...(bill.order_no ? [[{ text: 'PO No:', style: 'label' }, { text: bill.order_no, style: 'value' }]] : []),
+                                    ...(bill.vehicle_no ? [[{ text: 'Vehicle No:', style: 'label' }, { text: bill.vehicle_no, style: 'value' }]] : []),
+                                    ...(bill.dispatch_through ? [[{ text: 'Dispatch Through:', style: 'label' }, { text: bill.dispatch_through, style: 'value' }]] : [])
                                 ]
                             },
                             layout: {
@@ -385,10 +328,10 @@ exports.getBillPdf = async (req, res) => {
                                 { text: partyLabels.billTo, style: 'boxTitle' },
                                 {
                                     stack: [
-                                        { text: processedBill.firm || '', bold: true },
+                                        { text: bill.firm || '', bold: true },
                                         { text: formattedBuyerAddress },
-                                        { text: processedBill.state && buyerStateCode ? `State: ${processedBill.state} (${buyerStateCode})` : (processedBill.state ? `State: ${processedBill.state}` : '') },
-                                        { text: processedBill.gstin ? `GSTIN: ${processedBill.gstin}${processedBill.pin ? ` | PIN: ${processedBill.pin}` : ''}` : (processedBill.pin ? `PIN: ${processedBill.pin}` : '') }
+                                        { text: bill.state ? `State: ${bill.state}` : '' },
+                                        { text: bill.gstin ? `GSTIN: ${bill.gstin}${bill.pin ? ` | PIN: ${bill.pin}` : ''}` : (bill.pin ? `PIN: ${bill.pin}` : '') }
                                     ],
                                     margin: [0, 5, 0, 0]
                                 }
@@ -401,10 +344,10 @@ exports.getBillPdf = async (req, res) => {
                                 { text: partyLabels.shipTo, style: 'boxTitle' },
                                 {
                                     stack: [
-                                        { text: processedBill.consignee_name || processedBill.firm || '', bold: true },
+                                        { text: bill.consignee_name || bill.firm || '', bold: true },
                                         { text: formattedConsigneeAddress },
-                                        { text: (processedBill.consignee_state || processedBill.state) && consigneeStateCode ? `State: ${processedBill.consignee_state || processedBill.state} (${consigneeStateCode})` : ((processedBill.consignee_state || processedBill.state) ? `State: ${processedBill.consignee_state || processedBill.state}` : '') },
-                                        { text: (processedBill.consignee_gstin || processedBill.gstin) ? `GSTIN: ${processedBill.consignee_gstin || processedBill.gstin}${(processedBill.consignee_pin || processedBill.pin) ? ` | PIN: ${processedBill.consignee_pin || processedBill.pin}` : ''}` : ((processedBill.consignee_pin || processedBill.pin) ? `PIN: ${processedBill.consignee_pin || processedBill.pin}` : '') }
+                                        { text: (bill.consignee_state || bill.state) ? `State: ${bill.consignee_state || bill.state}` : '' },
+                                        { text: (bill.consignee_gstin || bill.gstin) ? `GSTIN: ${bill.consignee_gstin || bill.gstin}${(bill.consignee_pin || bill.pin) ? ` | PIN: ${bill.consignee_pin || bill.pin}` : ''}` : ((bill.consignee_pin || bill.pin) ? `PIN: ${bill.consignee_pin || bill.pin}` : '') }
                                     ],
                                     margin: [0, 5, 0, 0]
                                 }
@@ -498,9 +441,9 @@ exports.getBillPdf = async (req, res) => {
                                 ...hsnSummary.map(row => [
                                     { text: row.hsn, alignment: 'center', style: 'tableCell' },
                                     { text: formatCurrency(row.taxableValue), alignment: 'right', style: 'tableCell' },
-                                    { text: processedBill.type === 'intra-state' ? formatCurrency(row.cgst) : formatCurrency(0), alignment: 'right', style: 'tableCell' },
-                                    { text: processedBill.type === 'intra-state' ? formatCurrency(row.sgst) : formatCurrency(0), alignment: 'right', style: 'tableCell' },
-                                    { text: processedBill.type === 'inter-state' ? formatCurrency(row.igst) : formatCurrency(0), alignment: 'right', style: 'tableCell' },
+                                    { text: billType === 'intra-state' ? formatCurrency(row.cgst) : formatCurrency(0), alignment: 'right', style: 'tableCell' },
+                                    { text: billType === 'intra-state' ? formatCurrency(row.sgst) : formatCurrency(0), alignment: 'right', style: 'tableCell' },
+                                    { text: billType === 'inter-state' ? formatCurrency(row.igst) : formatCurrency(0), alignment: 'right', style: 'tableCell' },
                                     { text: formatCurrency(row.totalTax), alignment: 'right', bold: true, style: 'tableCell' }
                                 ])
                             ]
@@ -525,9 +468,9 @@ exports.getBillPdf = async (req, res) => {
                             stack: [
                                 { text: 'Amount (in words)', style: 'label', margin: [0, 15, 0, 5] },
                                 { text: numberToWords(roundedGrandTotal), bold: true, fontSize: 9 },
-                                ...(processedBill.narration ? [
+                                ...(bill.narration ? [
                                     { text: 'Narration', style: 'label', margin: [0, 8, 0, 5] },
-                                    { text: processedBill.narration, fontSize: 9 }
+                                    { text: bill.narration, fontSize: 9 }
                                 ] : [])
                             ]
                         },
@@ -541,10 +484,10 @@ exports.getBillPdf = async (req, res) => {
                                             [{ text: 'Taxable Value:', style: 'label' }, { text: formatCurrency(taxableValue), alignment: 'right', style: 'value' }],
                                             ...(gstEnabled ? (
                                                 billType === 'intra-state' ? [
-                                                    [{ text: 'CGST:', style: 'label' }, { text: formatCurrency(processedBill.cgst), alignment: 'right', style: 'value' }],
-                                                    [{ text: 'SGST:', style: 'label' }, { text: formatCurrency(processedBill.sgst), alignment: 'right', style: 'value' }]
+                                                    [{ text: 'CGST:', style: 'label' }, { text: formatCurrency(bill.cgst), alignment: 'right', style: 'value' }],
+                                                    [{ text: 'SGST:', style: 'label' }, { text: formatCurrency(bill.sgst), alignment: 'right', style: 'value' }]
                                                 ] : [
-                                                    [{ text: 'IGST:', style: 'label' }, { text: formatCurrency(processedBill.igst), alignment: 'right', style: 'value' }]
+                                                    [{ text: 'IGST:', style: 'label' }, { text: formatCurrency(bill.igst), alignment: 'right', style: 'value' }]
                                                 ]
                                             ) : []),
                                             [{ text: 'Total Tax:', style: 'label' }, { text: formatCurrency(totalTax), alignment: 'right', style: 'value' }],
@@ -558,7 +501,7 @@ exports.getBillPdf = async (req, res) => {
                                     },
                                     margin: [0, 15, 0, 0]
                                 },
-                                ...(processedBill.reverseCharge && gstEnabled ? [
+                                ...(bill.reverse_charge && gstEnabled ? [
                                     { text: 'Reverse charge applicable. Tax liability is on recipient.', fontSize: 8, color: 'red', margin: [0, 8, 0, 0], alignment: 'right' }
                                 ] : [])
                             ]
@@ -608,18 +551,35 @@ exports.getBillPdf = async (req, res) => {
         };
 
         const pdfDoc = await printer.createPdfKitDocument(docDefinition);
+        console.log('PDF document created successfully');
         
-        const safeBillNo = String(processedBill.bno || `BILL-${processedBill.id}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const safeBillNo = String(bill.bno || `BILL-${bill.id}`).replace(/[^a-zA-Z0-9._-]/g, '_');
         const filename = `Invoice_${safeBillNo}.pdf`;
+        console.log('PDF filename:', filename);
 
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         
         pdfDoc.pipe(res);
+        pdfDoc.on('end', () => {
+            console.log('PDF generation completed');
+        });
+        pdfDoc.on('error', (err) => {
+            console.error('PDF generation error:', err);
+        });
         pdfDoc.end();
+        console.log('PDF sent to client');
 
     } catch (err) {
         console.error('pdfmake export error:', err);
-        res.status(500).json({ error: err.message });
+        console.error('Error stack:', err.stack);
+        if (!res.headersSent) {
+            res.status(500).json({ error: err.message });
+        } else {
+            res.end();
+        }
     }
 };

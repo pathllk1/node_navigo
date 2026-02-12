@@ -411,8 +411,12 @@ export function initSalesSystem() {
                     }
                     
                     const result = await response.json();
-                    exportInvoiceToPDF(state, formatCurrency);
+                    console.log('Bill creation response:', result);
                     showToast(`Invoice saved successfully! Bill No: ${result.billNo}`, 'success');
+                    
+                    // Export to PDF with the bill ID
+                    console.log('Calling exportInvoiceToPDF with billId:', result.id);
+                    exportInvoiceToPDF(state, formatCurrency, result.id);
                     
                     // Reset form
                     clearCart(state);

@@ -1,5 +1,6 @@
 import express from 'express';
 import * as inventoryController from '../../controllers/inventory/sls/inventory.js';
+import { generateInvoicePDF } from '../../controllers/inventory/pdfMakeController.js';
 
 const router = express.Router();
 
@@ -16,6 +17,7 @@ router.post('/parties', inventoryController.createParty);
 
 // --- BILLS API ---
 router.post('/bills', inventoryController.createBill);
+router.get('/bills/:id/pdf', generateInvoicePDF);
 router.get('/bills/:id', inventoryController.getBillById);
 router.get('/bills', inventoryController.getAllBills);
 router.put('/bills/:id', inventoryController.updateBill);
