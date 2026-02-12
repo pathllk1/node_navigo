@@ -612,7 +612,7 @@ function handleCreateFieldChange(empId, field, value) {
     render();
   }
 
-  function handleManageFieldChange(wageId, field, value) {
+function handleManageFieldChange(wageId, field, value) {
     const wage = existingWages.find(w => w.id === wageId);
     if (!wage) return;
 
@@ -623,14 +623,32 @@ function handleCreateFieldChange(empId, field, value) {
     // Preserve raw input so we don't break cursor position during edits
     editedWages[wageId][field] = value;
 
-    // Auto-recalculate if wage_days changes
+    // 1. Auto-recalculate Gross Salary if wage_days changes
     if (field === 'wage_days') {
       const perDayWage = wage.p_day_wage || 0;
       const wageDaysNumber = toInt(value);
       editedWages[wageId].gross_salary = parseFloat((perDayWage * wageDaysNumber).toFixed(2));
+      
+      // Direct DOM Update: Gross Salary
+      const grossEl = document.getElementById(`wage-${wageId}-gross-display`);
+      if (grossEl) grossEl.innerText = formatCurrency(editedWages[wageId].gross_salary);
     }
 
-    render();
+    // 2. Recalculate Net Salary (Affected by ANY deduction change)
+    const currentData = editedWages[wageId];
+    const newNetSalary = calculateNetSalary(
+      toNumber(currentData.gross_salary),
+      toNumber(currentData.epf_deduction),
+      toNumber(currentData.esic_deduction),
+      toNumber(currentData.other_deduction),
+      toNumber(currentData.other_benefit)
+    );
+
+    // Direct DOM Update: Net Salary
+    const netEl = document.getElementById(`wage-${wageId}-net-display`);
+    if (netEl) netEl.innerText = formatCurrency(newNetSalary);
+
+   updateSummaryPanel();
   }
 
   /* --------------------------------------------------
@@ -832,108 +850,6 @@ function handleCreateFieldChange(empId, field, value) {
         
         if (wageId) window.wagesDashboard.handleManageEdit(parseInt(wageId), field, value);
         if (empId) window.wagesDashboard.handleCreateFieldChange(parseInt(empId), field, value);
-      } else if (action === 'filter-search') {
-        const field = e.target.dataset.field;
-        const value = e.target.value;
-        const mode = e.target.dataset.mode;
-        
-        if (mode === 'create') {
-          window.wagesDashboard.setCreateFilterDebounced(field, value);
-        } else if (mode === 'manage') {
-          window.wagesDashboard.setManageFilterDebounced(field, value);
-        }
-      }
-    });
-    
-    // Delegate checkbox changes
-    container.addEventListener('change', (e) => {
-      const action = e.target.dataset.action;
-      if (action === 'toggle-wage') {
-        const wageId = e.target.dataset.wageId;
-        window.wagesDashboard.toggleWageSelection(parseInt(wageId), e.target.checked);
-      } else if (action === 'toggle-employee') {
-        const empId = e.target.dataset.empId;
-        window.wagesDashboard.toggleEmployeeSelection(parseInt(empId), e.target.checked);
-      } else if (action === 'select-all-wages') {
-        window.wagesDashboard.toggleSelectAll(e.target.checked);
-      } else if (action === 'select-all-employees') {
-        window.wagesDashboard.toggleSelectAllCreate(e.target.checked);
-      } else if (action === 'filter-select') {
-        const field = e.target.dataset.field;
-        const value = e.target.value;
-        const mode = e.target.dataset.mode;
-        
-        if (mode === 'create') {
-          window.wagesDashboard.setCreateFilter(field, value);
-        } else if (mode === 'manage') {
-          window.wagesDashboard.setManageFilter(field, value);
-        }
-      } else if (action === 'common-payment') {
-        const field = e.target.dataset.field;
-        const value = e.target.value;
-        window.wagesDashboard.setCommonPayment(field, value);
-      }
-    });
-    
-    // Delegate click handlers
-    container.addEventListener('click', (e) => {
-      if (e.target.dataset.action === 'tab-switch') {
-        window.wagesDashboard.switchTab(e.target.dataset.tab);
-      } else if (e.target.dataset.action === 'load-employees') {
-        window.wagesDashboard.loadEmployees();
-      } else if (e.target.dataset.action === 'calculate-bulk') {
-        window.wagesDashboard.calculateBulk();
-      } else if (e.target.dataset.action === 'save-wages') {
-        window.wagesDashboard.saveWages();
-      } else if (e.target.dataset.action === 'export-excel') {
-        window.wagesDashboard.exportToExcel();
-      } else if (e.target.dataset.action === 'reset-filters') {
-        const mode = e.target.dataset.mode;
-        if (mode === 'create') {
-          window.wagesDashboard.resetCreateFilters();
-        } else {
-          window.wagesDashboard.resetManageFilters();
-        }
-      } else if (e.target.dataset.action === 'sort') {
-        const column = e.target.dataset.column;
-        const mode = e.target.dataset.mode;
-        if (mode === 'create') {
-          window.wagesDashboard.toggleCreateSort(column);
-        } else if (mode === 'manage') {
-          window.wagesDashboard.toggleManageSort(column);
-        }
-      } else if (e.target.dataset.action === 'set-month') {
-        window.wagesDashboard.setMonth(e.target.value);
-      } else if (e.target.dataset.action === 'set-manage-month') {
-        window.wagesDashboard.setManageMonth(e.target.value);
-      } else if (e.target.dataset.action === 'toggle-bulk-edit') {
-        window.wagesDashboard.toggleBulkEdit();
-      } else if (e.target.dataset.action === 'apply-bulk-edit') {
-        window.wagesDashboard.applyBulkEdit();
-      } else if (e.target.dataset.action === 'set-bulk-edit') {
-        window.wagesDashboard.setBulkEdit(e.target.dataset.field, e.target.value);
-      } else if (e.target.dataset.action === 'save-edited') {
-        window.wagesDashboard.saveEdited();
-      } else if (e.target.dataset.action === 'delete-selected') {
-        window.wagesDashboard.deleteSelected();
-      }
-    });
-  }
-
-  function attachEventDelegation(container) {
-    if (!container) return;
-    
-    // Delegate input changes for edit handlers
-    container.addEventListener('input', (e) => {
-      const action = e.target.dataset.action;
-      if (action === 'edit-wage' || action === 'edit-employee') {
-        const wageId = e.target.dataset.wageId;
-        const empId = e.target.dataset.empId;
-        const field = e.target.dataset.field;
-        const value = e.target.value;
-        
-        if (wageId) window.wagesDashboard.handleManageEdit(parseInt(wageId), field, value);
-        if (empId) window.wagesDashboard.handleCreateFieldChange(parseInt(empId), field, value);
       } else if (action === 'search-filter') {
         const mode = e.target.dataset.mode;
         const field = e.target.dataset.field;
@@ -948,7 +864,7 @@ function handleCreateFieldChange(empId, field, value) {
       }
     });
     
-    // Delegate checkbox changes
+    // Delegate checkbox and select changes
     container.addEventListener('change', (e) => {
       const action = e.target.dataset.action;
       if (action === 'toggle-wage') {
@@ -965,7 +881,7 @@ function handleCreateFieldChange(empId, field, value) {
         window.wagesDashboard.setMonth(e.target.value);
       } else if (action === 'set-manage-month') {
         window.wagesDashboard.setManageMonth(e.target.value);
-      } else if (action === 'set-filter') {
+      } else if (action === 'filter-select') {
         const mode = e.target.dataset.mode;
         const field = e.target.dataset.field;
         if (mode === 'create') {
@@ -973,7 +889,7 @@ function handleCreateFieldChange(empId, field, value) {
         } else if (mode === 'manage') {
           window.wagesDashboard.setManageFilter(field, e.target.value);
         }
-      } else if (action === 'set-payment') {
+      } else if (action === 'common-payment') {
         const field = e.target.dataset.field;
         window.wagesDashboard.setCommonPayment(field, e.target.value);
       }
@@ -985,7 +901,7 @@ function handleCreateFieldChange(empId, field, value) {
       if (action === 'switch-tab') {
         const tab = e.target.dataset.tab;
         window.wagesDashboard.switchTab(tab);
-      } else if (action === 'sort-column') {
+      } else if (action === 'sort') {
         const column = e.target.dataset.column;
         const mode = e.target.dataset.mode;
         if (mode === 'create') {
@@ -1031,6 +947,7 @@ function handleCreateFieldChange(empId, field, value) {
     const focusedWageId = activeElement?.dataset?.wageId;
     const focusedField = activeElement?.dataset?.field;
     const focusedEmpId = activeElement?.dataset?.empId;
+    const focusedMode = activeElement?.dataset?.mode;
     const focusedSelectionStart = activeElement?.selectionStart;
     const focusedSelectionEnd = activeElement?.selectionEnd;
     const focusedSelectionDirection = activeElement?.selectionDirection;
@@ -1130,6 +1047,62 @@ function handleCreateFieldChange(empId, field, value) {
         }
       }
     }
+    else if (focusedMode && focusedField) { // <--- ADD THIS BLOCK
+      const focusedInput = container.querySelector(`input[data-mode="${focusedMode}"][data-field="${focusedField}"], select[data-mode="${focusedMode}"][data-field="${focusedField}"]`);
+      if (focusedInput) {
+        focusedInput.focus();
+        try {
+           if (focusedSelectionStart !== null && focusedSelectionStart !== undefined) {
+             focusedInput.setSelectionRange(focusedSelectionStart, focusedSelectionEnd);
+           } else {
+             const length = focusedInput.value.length;
+             focusedInput.setSelectionRange(length, length);
+           }
+        } catch (e) {}
+      }
+    }
+  }
+
+  function updateSummaryPanel() {
+    // If no summary panel is visible (no selection), stop
+    if (selectedWageIds.size === 0) return;
+
+    let totalGross = 0;
+    let totalEpf = 0;
+    let totalEsic = 0;
+    let totalNet = 0;
+
+    // Loop through ALL selected wages to recalculate totals
+    selectedWageIds.forEach(wageId => {
+      const wage = existingWages.find(w => w.id === wageId);
+      if (!wage) return;
+
+      // Use the edited value if it exists, otherwise use the original value
+      const data = editedWages[wageId] || wage;
+
+      totalGross += toNumber(data.gross_salary);
+      totalEpf += toNumber(data.epf_deduction);
+      totalEsic += toNumber(data.esic_deduction);
+      
+      totalNet += calculateNetSalary(
+        toNumber(data.gross_salary),
+        toNumber(data.epf_deduction),
+        toNumber(data.esic_deduction),
+        toNumber(data.other_deduction),
+        toNumber(data.other_benefit)
+      );
+    });
+
+    // Update the DOM elements directly
+    const elGross = document.getElementById('summary-total-gross');
+    const elEpf = document.getElementById('summary-total-epf');
+    const elEsic = document.getElementById('summary-total-esic');
+    const elNet = document.getElementById('summary-total-net');
+
+    if (elGross) elGross.innerText = formatCurrency(totalGross);
+    if (elEpf) elEpf.innerText = formatCurrency(totalEpf);
+    if (elEsic) elEsic.innerText = formatCurrency(totalEsic);
+    if (elNet) elNet.innerText = formatCurrency(totalNet);
   }
 
   /* --------------------------------------------------

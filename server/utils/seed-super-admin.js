@@ -23,16 +23,16 @@ async function seedSuperAdmin() {
 
       const result = db.prepare(`
         INSERT INTO users (username, email, fullname, password, role, firm_id, status)
-        VALUES (@username, @email, @fullname, @password, @role, @firm_id, @status)
-      `).run({
-        username: 'superadmin',
-        email: 'superadmin@system.com',
-        fullname: 'Super Administrator',
-        password: hashedPassword,
-        role: 'super_admin',
-        firm_id: null,
-        status: 'approved'
-      });
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        'superadmin',
+        'superadmin@system.com',
+        'Super Administrator',
+        hashedPassword,
+        'super_admin',
+        null,
+        'approved'
+      );
 
       console.log('✅ Super admin created successfully');
       console.log('📧 Email: superadmin@system.com');
@@ -43,11 +43,11 @@ async function seedSuperAdmin() {
     // Initialize gst_enabled setting if it doesn't exist
     const existingGstSetting = Settings.getByKey.get('gst_enabled');
     if (!existingGstSetting) {
-      Settings.create.run({
-        setting_key: 'gst_enabled',
-        setting_value: 'true',
-        description: 'Global GST calculation toggle'
-      });
+      Settings.create.run(
+        'gst_enabled',
+        'true',
+        'Global GST calculation toggle'
+      );
       console.log('✅ GST setting initialized');
     }
 

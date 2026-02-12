@@ -4,6 +4,7 @@ import { db } from '../utils/db.js';
 
 /* --------------------------------------------------
    PREPARED STATEMENTS - WITH FIRM ISOLATION & USER TRACKING
+   NOW USING POSITIONAL PARAMETERS
 -------------------------------------------------- */
 
 const insertStmt = db.prepare(`
@@ -33,33 +34,7 @@ const insertStmt = db.prepare(`
     status,
     created_by,
     updated_by
-  ) VALUES (
-    @firm_id,
-    @employee_name,
-    @father_husband_name,
-    @date_of_birth,
-    @aadhar,
-    @pan,
-    @phone_no,
-    @address,
-    @bank,
-    @account_no,
-    @ifsc,
-    @branch,
-    @uan,
-    @esic_no,
-    @s_kalyan_no,
-    @category,
-    @p_day_wage,
-    @project,
-    @site,
-    @date_of_joining,
-    @date_of_exit,
-    @doe_rem,
-    @status,
-    @created_by,
-    @updated_by
-  )
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 // Get by ID with firm check and creator info
@@ -142,14 +117,14 @@ const searchStmt = db.prepare(`
   LEFT JOIN users u_updater ON u_updater.id = mr.updated_by
   WHERE mr.firm_id = ?
     AND (
-      mr.employee_name LIKE @search
-      OR mr.aadhar LIKE @search
-      OR mr.phone_no LIKE @search
-      OR mr.project LIKE @search
-      OR mr.site LIKE @search
+      mr.employee_name LIKE ?
+      OR mr.aadhar LIKE ?
+      OR mr.phone_no LIKE ?
+      OR mr.project LIKE ?
+      OR mr.site LIKE ?
     )
   ORDER BY mr.created_at DESC
-  LIMIT @limit OFFSET @offset
+  LIMIT ? OFFSET ?
 `);
 
 // Get statistics by firm
@@ -217,14 +192,34 @@ export const createMasterRoll = (req, res) => {
       }
     }
 
-    // Insert with firm_id and user tracking
-    const result = insertStmt.run({
+    // Insert with positional parameters
+    const result = insertStmt.run(
       firm_id,
-      created_by: user_id,
-      updated_by: user_id,
-      status: req.body.status || 'Active',
-      ...req.body
-    });
+      req.body.employee_name,
+      req.body.father_husband_name,
+      req.body.date_of_birth,
+      req.body.aadhar,
+      req.body.pan,
+      req.body.phone_no,
+      req.body.address,
+      req.body.bank,
+      req.body.account_no,
+      req.body.ifsc,
+      req.body.branch,
+      req.body.uan,
+      req.body.esic_no,
+      req.body.s_kalyan_no,
+      req.body.category,
+      req.body.p_day_wage,
+      req.body.project,
+      req.body.site,
+      req.body.date_of_joining,
+      req.body.date_of_exit,
+      req.body.doe_rem,
+      req.body.status || 'Active',
+      user_id,
+      user_id
+    );
 
     res.status(201).json({
       success: true,
@@ -284,12 +279,14 @@ export const getAllMasterRolls = (req, res) => {
 export const getMasterRollById = (req, res) => {
   try {
     const { firm_id } = req.user;
-    const row = getByIdStmt.get(req.params.id, firm_id);
+    const { id } = req.params;
+
+    const row = getByIdStmt.get(id, firm_id);
 
     if (!row) {
       return res.status(404).json({
         success: false,
-        message: 'Master roll not found or access denied'
+        error: 'Employee not found or access denied'
       });
     }
 
@@ -305,72 +302,103 @@ export const getMasterRollById = (req, res) => {
   }
 };
 
-// UPDATE - with firm check, dynamic fields, and user tracking
+// UPDATE - with firm check and user tracking
 export const updateMasterRoll = (req, res) => {
   try {
-    const { firm_id, id: user_id, fullname, username } = req.user;
+    const { firm_id, id: user_id, role } = req.user;
     const { id } = req.params;
+    
+    // Convert id to number for consistency
+    const masterId = parseInt(id, 10);
+    const firmId = parseInt(firm_id, 10);
 
-    // Check ownership
-    const ownership = checkFirmOwnership.get(id, firm_id);
-    if (!ownership) {
-      return res.status(404).json({
-        success: false,
-        message: 'Master roll not found or access denied'
-      });
+    // Check ownership - allow super_admin to bypass firm check
+    if (role !== 'super_admin') {
+      const ownership = checkFirmOwnership.get(masterId, firmId);
+      if (!ownership) {
+        return res.status(404).json({
+          success: false,
+          error: 'Employee not found or access denied'
+        });
+      }
+    } else {
+      // Super admin - just check if employee exists
+      const exists = db.prepare('SELECT id FROM master_rolls WHERE id = ?').get(masterId);
+      if (!exists) {
+        return res.status(404).json({
+          success: false,
+          error: 'Employee not found'
+        });
+      }
     }
 
-    // Remove fields that shouldn't be updated
-    const { firm_id: _, created_at, created_by, updated_by, ...fields } = req.body;
+    // Build update query dynamically based on provided fields
+    const allowedFields = [
+      'employee_name', 'father_husband_name', 'date_of_birth',
+      'aadhar', 'pan', 'phone_no', 'address', 'bank', 'account_no',
+      'ifsc', 'branch', 'uan', 'esic_no', 's_kalyan_no', 'category',
+      'p_day_wage', 'project', 'site', 'date_of_joining', 'date_of_exit',
+      'doe_rem', 'status'
+    ];
 
-    // Don't allow changing aadhar to prevent duplicates
-    if (fields.aadhar) {
-      delete fields.aadhar;
+    const updates = [];
+    const values = [];
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updates.push(`${field} = ?`);
+        values.push(req.body[field]);
+      }
     }
 
-    if (Object.keys(fields).length === 0) {
+    if (updates.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'No valid fields to update'
       });
     }
 
-    // Build SET clause dynamically
-    const setClause = Object.keys(fields)
-      .map(key => `${key} = @${key}`)
-      .join(", ");
+    // Add updated_by and updated_at
+    updates.push('updated_by = ?');
+    updates.push('updated_at = ?');
+    values.push(user_id);
+    values.push(new Date().toISOString());
 
-    const stmt = db.prepare(`
-      UPDATE master_rolls
-      SET ${setClause}, 
-          updated_by = @updated_by,
-          updated_at = datetime('now')
-      WHERE id = @id AND firm_id = @firm_id
-    `);
-
-    const result = stmt.run({
-      ...fields,
-      id,
-      firm_id,
-      updated_by: user_id
-    });
-
-    if (result.changes === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Master roll not found or no changes made'
-      });
+    // Add WHERE clause parameters
+    values.push(masterId);
+    
+    // Build WHERE clause based on role
+    let updateQuery;
+    if (role === 'super_admin') {
+      // Super admin can update any employee
+      updateQuery = `UPDATE master_rolls SET ${updates.join(', ')} WHERE id = ?`;
+    } else {
+      // Regular users can only update employees in their firm
+      values.push(firmId);
+      updateQuery = `UPDATE master_rolls SET ${updates.join(', ')} WHERE id = ? AND firm_id = ?`;
     }
 
-    res.json({
-      success: true,
-      message: 'Master roll updated successfully',
-      updated_by: {
-        id: user_id,
-        name: fullname,
-        username: username
-      }
-    });
+    // Use db.exec() with raw SQL instead of prepared statements for UPDATE
+    // Turso has issues with prepared statement UPDATEs with many parameters
+    try {
+      db.exec(updateQuery, values);
+      
+      console.log(`[UPDATE] Query executed successfully`);
+      console.log(`[UPDATE] Query: ${updateQuery}`);
+      console.log(`[UPDATE] Values: ${JSON.stringify(values)}`);
+      
+      res.json({
+        success: true,
+        message: 'Employee updated successfully',
+        updated_by: user_id
+      });
+    } catch (execErr) {
+      console.error(`[UPDATE] Error:`, execErr.message);
+      return res.status(400).json({
+        success: false,
+        error: execErr.message
+      });
+    }
   } catch (err) {
     res.status(400).json({
       success: false,
@@ -379,53 +407,24 @@ export const updateMasterRoll = (req, res) => {
   }
 };
 
-// DELETE - with firm check and user tracking in response
+// DELETE - with firm check
 export const deleteMasterRoll = (req, res) => {
   try {
-    const { firm_id, role, id: user_id, fullname, username } = req.user;
+    const { firm_id } = req.user;
     const { id } = req.params;
-
-    // Only admin and manager can delete
-    if (role === 'user') {
-      return res.status(403).json({
-        success: false,
-        error: 'Only managers and admins can delete master rolls'
-      });
-    }
-
-    // Get employee info before deletion for logging
-    const employee = getByIdStmt.get(id, firm_id);
-
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: 'Master roll not found or access denied'
-      });
-    }
 
     const result = deleteStmt.run(id, firm_id);
 
     if (result.changes === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Master roll not found or access denied'
+        error: 'Employee not found or access denied'
       });
     }
 
     res.json({
       success: true,
-      message: 'Master roll deleted successfully',
-      deleted_employee: {
-        id: employee.id,
-        name: employee.employee_name,
-        aadhar: employee.aadhar
-      },
-      deleted_by: {
-        id: user_id,
-        name: fullname,
-        username: username,
-        role: role
-      }
+      message: 'Employee deleted successfully'
     });
   } catch (err) {
     res.status(500).json({
@@ -439,20 +438,31 @@ export const deleteMasterRoll = (req, res) => {
 export const searchMasterRolls = (req, res) => {
   try {
     const { firm_id } = req.user;
-    const { q = '', limit = 50, offset = 0 } = req.query;
+    const { q, limit = 50, offset = 0 } = req.query;
 
-    const rows = searchStmt.all({
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        error: 'Search query required'
+      });
+    }
+
+    const searchPattern = `%${q}%`;
+    const rows = searchStmt.all(
       firm_id,
-      search: `%${q}%`,
-      limit: parseInt(limit),
-      offset: parseInt(offset)
-    });
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      parseInt(limit),
+      parseInt(offset)
+    );
 
     res.json({
       success: true,
       count: rows.length,
-      data: rows,
-      query: q
+      data: rows
     });
   } catch (err) {
     res.status(500).json({
@@ -480,20 +490,11 @@ export const getMasterRollStats = (req, res) => {
   }
 };
 
-// GET ACTIVITY LOG - track who created/updated
+// GET ACTIVITY LOG - with firm check
 export const getActivityLog = (req, res) => {
   try {
     const { firm_id } = req.user;
     const { id } = req.params;
-
-    // Check access
-    const ownership = checkFirmOwnership.get(id, firm_id);
-    if (!ownership) {
-      return res.status(404).json({
-        success: false,
-        message: 'Master roll not found or access denied'
-      });
-    }
 
     const activities = getActivityLogStmt.all(id, firm_id, id, firm_id);
 
@@ -541,12 +542,33 @@ export const bulkImportMasterRolls = (req, res) => {
       for (let i = 0; i < employeeList.length; i++) {
         try {
           const emp = employeeList[i];
-          const result = insertStmt.run({
+          const result = insertStmt.run(
             firm_id,
-            created_by: user_id,
-            updated_by: user_id,
-            ...emp
-          });
+            emp.employee_name,
+            emp.father_husband_name,
+            emp.date_of_birth,
+            emp.aadhar,
+            emp.pan,
+            emp.phone_no,
+            emp.address,
+            emp.bank,
+            emp.account_no,
+            emp.ifsc,
+            emp.branch,
+            emp.uan,
+            emp.esic_no,
+            emp.s_kalyan_no,
+            emp.category,
+            emp.p_day_wage,
+            emp.project,
+            emp.site,
+            emp.date_of_joining,
+            emp.date_of_exit,
+            emp.doe_rem,
+            emp.status,
+            user_id,
+            user_id
+          );
           results.success.push({
             index: i,
             id: result.lastInsertRowid,
@@ -626,14 +648,6 @@ export const exportMasterRolls = (req, res) => {
 };
 
 /* --------------------------------------------------
-   FILE: server/controllers/masterRoll.controller.js
--------------------------------------------------- */
-
-// ... existing imports
-// Make sure you import the insertStmt or redefine it if it's not exported. 
-// Since we are in the same file, we reuse `insertStmt`.
-
-/* --------------------------------------------------
    BULK ACTION
 -------------------------------------------------- */
 
@@ -649,58 +663,54 @@ export const bulkCreateMasterRoll = (req, res) => {
     let successCount = 0;
     let errors = [];
 
-    // Run in a transaction for performance and data integrity
-    const bulkTransaction = db.transaction((items) => {
-      for (const item of items) {
-        try {
-          // 1. Basic Validation (skip empty rows)
-          if (!item.employee_name || !item.aadhar) {
-            errors.push(`Skipped row: Missing Name or Aadhar`);
-            continue;
-          }
+    // Process each row individually without transaction to avoid rollback issues
+    // This allows partial success and better error handling
+    for (const item of rows) {
+      try {
+        // 1. Basic Validation (skip empty rows)
+        if (!item.employee_name || !item.aadhar) {
+          errors.push(`Skipped row: Missing Name or Aadhar`);
+          continue;
+        }
 
-          // 2. Insert
-          insertStmt.run({
-            firm_id,
-            created_by: user_id,
-            updated_by: user_id,
-            // Map fields, providing defaults for missing ones
-            employee_name: item.employee_name,
-            father_husband_name: item.father_husband_name || '',
-            date_of_birth: item.date_of_birth || '', 
-            aadhar: String(item.aadhar), // Ensure string
-            pan: item.pan || null,
-            phone_no: String(item.phone_no || ''),
-            address: item.address || '',
-            bank: item.bank || '',
-            account_no: String(item.account_no || ''),
-            ifsc: item.ifsc || '',
-            branch: item.branch || '',
-            uan: item.uan || null,
-            esic_no: item.esic_no || null,
-            s_kalyan_no: item.s_kalyan_no || null,
-            category: item.category || 'UNSKILLED',
-            p_day_wage: item.p_day_wage || 0,
-            project: item.project || null,
-            site: item.site || null,
-            date_of_joining: item.date_of_joining || new Date().toISOString().split('T')[0],
-            date_of_exit: item.date_of_exit || null,
-            doe_rem: item.doe_rem || null,
-            status: item.status || 'Active'
-          });
-          successCount++;
-        } catch (err) {
-          // Handle unique constraint violations (e.g., Duplicate Aadhar)
-          if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.message.includes('UNIQUE constraint failed')) {
-            errors.push(`Duplicate Aadhar: ${item.aadhar} (${item.employee_name})`);
-          } else {
-            errors.push(`Error for ${item.employee_name}: ${err.message}`);
-          }
+        // 2. Insert with positional parameters
+        insertStmt.run(
+          firm_id,
+          item.employee_name,
+          item.father_husband_name || '',
+          item.date_of_birth || '',
+          String(item.aadhar),
+          item.pan || null,
+          String(item.phone_no || ''),
+          item.address || '',
+          item.bank || '',
+          String(item.account_no || ''),
+          item.ifsc || '',
+          item.branch || '',
+          item.uan || null,
+          item.esic_no || null,
+          item.s_kalyan_no || null,
+          item.category || 'UNSKILLED',
+          item.p_day_wage || 0,
+          item.project || null,
+          item.site || null,
+          item.date_of_joining || new Date().toISOString().split('T')[0],
+          item.date_of_exit || null,
+          item.doe_rem || null,
+          item.status || 'Active',
+          user_id,
+          user_id
+        );
+        successCount++;
+      } catch (err) {
+        // Handle unique constraint violations (e.g., Duplicate Aadhar)
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.message.includes('UNIQUE constraint failed')) {
+          errors.push(`Duplicate Aadhar: ${item.aadhar} (${item.employee_name})`);
+        } else {
+          errors.push(`Error for ${item.employee_name}: ${err.message}`);
         }
       }
-    });
-
-    bulkTransaction(rows);
+    }
 
     res.json({
       success: true,
@@ -715,6 +725,7 @@ export const bulkCreateMasterRoll = (req, res) => {
     res.status(500).json({ success: false, error: "Bulk upload failed on server." });
   }
 };
+
 /* --------------------------------------------------
    BULK DELETE - ADDED FOR CONSISTENCY
 -------------------------------------------------- */

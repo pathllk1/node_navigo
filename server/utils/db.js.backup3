@@ -25,45 +25,41 @@ export const db = new Database(process.env.TURSO_DATABASE_URL, {authToken: proce
 
 try {
   // Check if users table exists and has NOT NULL constraint on firm_id
-  try {
-    const tableInfo = db.prepare("PRAGMA table_info(users)").all();
-    const firmIdColumn = tableInfo.find(col => col.name === 'firm_id');
+  const tableInfo = db.prepare("PRAGMA table_info(users)").all();
+  const firmIdColumn = tableInfo.find(col => col.name === 'firm_id');
+  
+  if (firmIdColumn && firmIdColumn.notnull === 1) {
+    // Need to migrate - firm_id is NOT NULL, need to make it nullable
+    console.log('🔄 Migrating users table to make firm_id nullable...');
     
-    if (firmIdColumn && firmIdColumn.notnull === 1) {
-      // Need to migrate - firm_id is NOT NULL, need to make it nullable
-      console.log('🔄 Migrating users table to make firm_id nullable...');
+    db.exec(`
+      BEGIN TRANSACTION;
       
-      db.exec(`
-        BEGIN TRANSACTION;
-        
-        ALTER TABLE users RENAME TO users_backup;
-        
-        CREATE TABLE users (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          username TEXT NOT NULL UNIQUE,
-          email TEXT NOT NULL UNIQUE,
-          fullname TEXT NOT NULL,
-          password TEXT NOT NULL,
-          role TEXT CHECK(role IN ('user','manager','admin','super_admin')) DEFAULT 'user',
-          firm_id INTEGER,
-          status TEXT CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
-          last_mail_sent TEXT,
-          last_login TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-          FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE
-        ) STRICT;
-        
-        INSERT INTO users SELECT * FROM users_backup;
-        DROP TABLE users_backup;
-        
-        COMMIT;
-      `);
+      ALTER TABLE users RENAME TO users_backup;
       
-      console.log('✅ Migration complete - firm_id is now nullable');
-    }
-  } catch (migrationErr) {
-    console.log('ℹ️  Schema migration skipped:', migrationErr.message);
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL UNIQUE,
+        fullname TEXT NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT CHECK(role IN ('user','manager','admin','super_admin')) DEFAULT 'user',
+        firm_id INTEGER,
+        status TEXT CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
+        last_mail_sent TEXT,
+        last_login TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE
+      ) STRICT;
+      
+      INSERT INTO users SELECT * FROM users_backup;
+      DROP TABLE users_backup;
+      
+      COMMIT;
+    `);
+    
+    console.log('✅ Migration complete - firm_id is now nullable');
   }
 } catch (err) {
   console.log('ℹ️  Schema migration skipped (table may already be correct)');
@@ -73,8 +69,7 @@ try {
    SCHEMA - WITH MULTI-FIRM SUPPORT
 -------------------------------------------------- */
 
-try {
-  db.exec(`
+db.exec(`
 -- FIRMS
 CREATE TABLE IF NOT EXISTS firms (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -408,9 +403,6 @@ CREATE TABLE IF NOT EXISTS firm_settings (
   FOREIGN KEY (firm_id) REFERENCES firms(id) ON DELETE CASCADE
 ) STRICT;
 `);
-} catch (err) {
-  console.log('ℹ️  Schema initialization skipped:', err.message);
-}
 
 /* --------------------------------------------------
    INDEXES FOR PERFORMANCE
@@ -579,16 +571,9 @@ function addColumnIfNotExists(table, columnDef) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
     console.log(`✅ Added column: ${table}.${columnDef}`);
   } catch (err) {
-    if (err.message.includes('duplicate column name')) {
-      // Column already exists, this is fine
-      return;
+    if (!err.message.includes('duplicate column name')) {
+      throw err;
     }
-    if (err.message.includes('502 Bad Gateway') || err.message.includes('Hrana')) {
-      console.log(`⚠️  Skipped column addition (database unavailable): ${table}.${columnDef}`);
-      return;
-    }
-    // Log other errors but don't crash
-    console.log(`ℹ️  Column addition skipped: ${table}.${columnDef} - ${err.message}`);
   }
 }
 
@@ -663,7 +648,7 @@ addColumnIfNotExists('firm_settings', 'description TEXT');
 export const Firm = {
   create: db.prepare(`
     INSERT INTO firms (name, code, description, legal_name, address, city, state, country, pincode, phone_number, secondary_phone, email, website, business_type, industry_type, establishment_year, employee_count, registration_number, registration_date, cin_number, pan_number, gst_number, tax_id, vat_number, bank_account_number, bank_name, bank_branch, ifsc_code, payment_terms, status, license_numbers, insurance_details, currency, timezone, fiscal_year_start, invoice_prefix, quote_prefix, po_prefix, logo_url, invoice_template, enable_e_invoice)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
   getById: db.prepare(`SELECT * FROM firms WHERE id = ?`),
@@ -680,49 +665,49 @@ export const Firm = {
 
   update: db.prepare(`
     UPDATE firms 
-    SET name = COALESCE(?, name),
-        code = COALESCE(?, code),
-        description = COALESCE(?, description),
-        legal_name = COALESCE(?, legal_name),
-        address = COALESCE(?, address),
-        city = COALESCE(?, city),
-        state = COALESCE(?, state),
-        country = COALESCE(?, country),
-        pincode = COALESCE(?, pincode),
-        phone_number = COALESCE(?, phone_number),
-        secondary_phone = COALESCE(?, secondary_phone),
-        email = COALESCE(?, email),
-        website = COALESCE(?, website),
-        business_type = COALESCE(?, business_type),
-        industry_type = COALESCE(?, industry_type),
-        establishment_year = COALESCE(?, establishment_year),
-        employee_count = COALESCE(?, employee_count),
-        registration_number = COALESCE(?, registration_number),
-        registration_date = COALESCE(?, registration_date),
-        cin_number = COALESCE(?, cin_number),
-        pan_number = COALESCE(?, pan_number),
-        gst_number = COALESCE(?, gst_number),
-        tax_id = COALESCE(?, tax_id),
-        vat_number = COALESCE(?, vat_number),
-        bank_account_number = COALESCE(?, bank_account_number),
-        bank_name = COALESCE(?, bank_name),
-        bank_branch = COALESCE(?, bank_branch),
-        ifsc_code = COALESCE(?, ifsc_code),
-        payment_terms = COALESCE(?, payment_terms),
-        status = COALESCE(?, status),
-        license_numbers = COALESCE(?, license_numbers),
-        insurance_details = COALESCE(?, insurance_details),
-        currency = COALESCE(?, currency),
-        timezone = COALESCE(?, timezone),
-        fiscal_year_start = COALESCE(?, fiscal_year_start),
-        invoice_prefix = COALESCE(?, invoice_prefix),
-        quote_prefix = COALESCE(?, quote_prefix),
-        po_prefix = COALESCE(?, po_prefix),
-        logo_url = COALESCE(?, logo_url),
-        invoice_template = COALESCE(?, invoice_template),
-        enable_e_invoice = COALESCE(?, enable_e_invoice),
+    SET name = COALESCE(@name, name),
+        code = COALESCE(@code, code),
+        description = COALESCE(@description, description),
+        legal_name = COALESCE(@legal_name, legal_name),
+        address = COALESCE(@address, address),
+        city = COALESCE(@city, city),
+        state = COALESCE(@state, state),
+        country = COALESCE(@country, country),
+        pincode = COALESCE(@pincode, pincode),
+        phone_number = COALESCE(@phone_number, phone_number),
+        secondary_phone = COALESCE(@secondary_phone, secondary_phone),
+        email = COALESCE(@email, email),
+        website = COALESCE(@website, website),
+        business_type = COALESCE(@business_type, business_type),
+        industry_type = COALESCE(@industry_type, industry_type),
+        establishment_year = COALESCE(@establishment_year, establishment_year),
+        employee_count = COALESCE(@employee_count, employee_count),
+        registration_number = COALESCE(@registration_number, registration_number),
+        registration_date = COALESCE(@registration_date, registration_date),
+        cin_number = COALESCE(@cin_number, cin_number),
+        pan_number = COALESCE(@pan_number, pan_number),
+        gst_number = COALESCE(@gst_number, gst_number),
+        tax_id = COALESCE(@tax_id, tax_id),
+        vat_number = COALESCE(@vat_number, vat_number),
+        bank_account_number = COALESCE(@bank_account_number, bank_account_number),
+        bank_name = COALESCE(@bank_name, bank_name),
+        bank_branch = COALESCE(@bank_branch, bank_branch),
+        ifsc_code = COALESCE(@ifsc_code, ifsc_code),
+        payment_terms = COALESCE(@payment_terms, payment_terms),
+        status = COALESCE(@status, status),
+        license_numbers = COALESCE(@license_numbers, license_numbers),
+        insurance_details = COALESCE(@insurance_details, insurance_details),
+        currency = COALESCE(@currency, currency),
+        timezone = COALESCE(@timezone, timezone),
+        fiscal_year_start = COALESCE(@fiscal_year_start, fiscal_year_start),
+        invoice_prefix = COALESCE(@invoice_prefix, invoice_prefix),
+        quote_prefix = COALESCE(@quote_prefix, quote_prefix),
+        po_prefix = COALESCE(@po_prefix, po_prefix),
+        logo_url = COALESCE(@logo_url, logo_url),
+        invoice_template = COALESCE(@invoice_template, invoice_template),
+        enable_e_invoice = COALESCE(@enable_e_invoice, enable_e_invoice),
         updated_at = datetime('now')
-    WHERE id = ?
+    WHERE id = @id
   `),
 
   delete: db.prepare(`DELETE FROM firms WHERE id = ?`)
@@ -818,31 +803,31 @@ export const MasterRoll = {
       created_by,
       updated_by
     ) VALUES (
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?
+      @firm_id,
+      @employee_name,
+      @father_husband_name,
+      @date_of_birth,
+      @aadhar,
+      @pan,
+      @phone_no,
+      @address,
+      @bank,
+      @account_no,
+      @ifsc,
+      @branch,
+      @uan,
+      @esic_no,
+      @s_kalyan_no,
+      @category,
+      @p_day_wage,
+      @project,
+      @site,
+      @date_of_joining,
+      @date_of_exit,
+      @doe_rem,
+      @status,
+      @created_by,
+      @updated_by
     )
   `),
 
@@ -890,22 +875,22 @@ export const Wage = {
       created_by,
       updated_by
     ) VALUES (
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?
+      @firm_id,
+      @master_roll_id,
+      @p_day_wage,
+      @wage_days,
+      @gross_salary,
+      @net_salary,
+      @salary_month,
+      @epf_deduction,
+      @esic_deduction,
+      @other_deduction,
+      @other_benefit,
+      @paid_date,
+      @cheque_no,
+      @paid_from_bank_ac,
+      @created_by,
+      @updated_by
     )
   `),
 
@@ -942,20 +927,20 @@ export const Wage = {
   update: db.prepare(`
     UPDATE wages
     SET 
-      p_day_wage = ?,
-      wage_days = ?,
-      gross_salary = ?,
-      epf_deduction = ?,
-      esic_deduction = ?,
-      other_deduction = ?,
-      other_benefit = ?,
-      net_salary = ?,
-      paid_date = ?,
-      cheque_no = ?,
-      paid_from_bank_ac = ?,
-      updated_by = ?,
+      p_day_wage = @p_day_wage,
+      wage_days = @wage_days,
+      gross_salary = @gross_salary,
+      epf_deduction = @epf_deduction,
+      esic_deduction = @esic_deduction,
+      other_deduction = @other_deduction,
+      other_benefit = @other_benefit,
+      net_salary = @net_salary,
+      paid_date = @paid_date,
+      cheque_no = @cheque_no,
+      paid_from_bank_ac = @paid_from_bank_ac,
+      updated_by = @updated_by,
       updated_at = datetime('now')
-    WHERE id = ? AND firm_id = ?
+    WHERE id = @id AND firm_id = @firm_id
   `),
 
   delete: db.prepare(`
@@ -1026,9 +1011,9 @@ export const Stock = {
 
   update: db.prepare(`
     UPDATE stocks 
-    SET item = ?, pno = ?, oem = ?, hsn = ?, qty = ?, uom = ?, 
-        rate = ?, grate = ?, total = ?, mrp = ?, batches = ?, user = ?, updated_at = datetime('now')
-    WHERE id = ? AND firm_id = ?
+    SET item = @item, pno = @pno, oem = @oem, hsn = @hsn, qty = @qty, uom = @uom, 
+        rate = @rate, grate = @grate, total = @total, mrp = @mrp, batches = @batches, user = @user, updated_at = datetime('now')
+    WHERE id = @id AND firm_id = @firm_id
   `),
 
   delete: db.prepare(`
@@ -1040,7 +1025,7 @@ export const Stock = {
 export const Party = {
   create: db.prepare(`
     INSERT INTO parties (firm_id, firm, gstin, contact, state, state_code, addr, pin, pan, usern, supply)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (@firm_id, @firm, @gstin, @contact, @state, @state_code, @addr, @pin, @pan, @usern, @supply)
   `),
 
   getById: db.prepare(`
@@ -1057,9 +1042,9 @@ export const Party = {
 
   update: db.prepare(`
     UPDATE parties 
-    SET firm = ?, gstin = ?, contact = ?, state = ?, state_code = ?, 
-        addr = ?, pin = ?, pan = ?, supply = ?, updated_at = datetime('now')
-    WHERE id = ? AND firm_id = ?
+    SET firm = @firm, gstin = @gstin, contact = @contact, state = @state, state_code = @state_code, 
+        addr = @addr, pin = @pin, pan = @pan, supply = @supply, updated_at = datetime('now')
+    WHERE id = @id AND firm_id = @firm_id
   `),
 
   delete: db.prepare(`
@@ -1071,7 +1056,7 @@ export const Party = {
 export const Bill = {
   create: db.prepare(`
     INSERT INTO bills (firm_id, bno, bdate, supply, addr, gstin, state, pin, state_code, gtot, ntot, rof, btype, usern, firm, party_id, oth_chg_json, order_no, vehicle_no, dispatch_through, narration, reverse_charge, cgst, sgst, igst, consignee_name, consignee_gstin, consignee_address, consignee_state, consignee_pin, consignee_state_code)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (@firm_id, @bno, @bdate, @supply, @addr, @gstin, @state, @pin, @state_code, @gtot, @ntot, @rof, @btype, @usern, @firm, @party_id, @oth_chg_json, @order_no, @vehicle_no, @dispatch_through, @narration, @reverse_charge, @cgst, @sgst, @igst, @consignee_name, @consignee_gstin, @consignee_address, @consignee_state, @consignee_pin, @consignee_state_code)
   `),
 
   getById: db.prepare(`
@@ -1088,20 +1073,20 @@ export const Bill = {
 
   update: db.prepare(`
     UPDATE bills 
-    SET bno = ?, bdate = ?, supply = ?, addr = ?, gstin = ?, state = ?, pin = ?, state_code = ?, 
-        gtot = ?, ntot = ?, rof = ?, btype = ?, usern = ?, firm = ?, party_id = ?, 
-        oth_chg_json = ?, order_no = ?, vehicle_no = ?, dispatch_through = ?, 
-        narration = ?, reverse_charge = ?, cgst = ?, sgst = ?, igst = ?,
-        consignee_name = ?, consignee_gstin = ?, consignee_address = ?, 
-        consignee_state = ?, consignee_pin = ?, consignee_state_code = ?,
+    SET bno = @bno, bdate = @bdate, supply = @supply, addr = @addr, gstin = @gstin, state = @state, pin = @pin, state_code = @state_code, 
+        gtot = @gtot, ntot = @ntot, rof = @rof, btype = @btype, usern = @usern, firm = @firm, party_id = @party_id, 
+        oth_chg_json = @oth_chg_json, order_no = @order_no, vehicle_no = @vehicle_no, dispatch_through = @dispatch_through, 
+        narration = @narration, reverse_charge = @reverse_charge, cgst = @cgst, sgst = @sgst, igst = @igst,
+        consignee_name = @consignee_name, consignee_gstin = @consignee_gstin, consignee_address = @consignee_address, 
+        consignee_state = @consignee_state, consignee_pin = @consignee_pin, consignee_state_code = @consignee_state_code,
         updated_at = datetime('now')
-    WHERE id = ? AND firm_id = ?
+    WHERE id = @id AND firm_id = @firm_id
   `),
 
   updateStatus: db.prepare(`
     UPDATE bills 
-    SET status = ?, cancellation_reason = ?, cancelled_at = ?, cancelled_by = ?, updated_at = datetime('now')
-    WHERE id = ? AND firm_id = ?
+    SET status = @status, cancellation_reason = @cancellation_reason, cancelled_at = @cancelled_at, cancelled_by = @cancelled_by, updated_at = datetime('now')
+    WHERE id = @id AND firm_id = @firm_id
   `),
 
   delete: db.prepare(`
@@ -1113,7 +1098,7 @@ export const Bill = {
 export const StockReg = {
   create: db.prepare(`
     INSERT INTO stock_reg (firm_id, type, bno, bdate, supply, item, item_narration, batch, hsn, qty, uom, rate, grate, disc, total, stock_id, bill_id, user, firm, qtyh)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (@firm_id, @type, @bno, @bdate, @supply, @item, @item_narration, @batch, @hsn, @qty, @uom, @rate, @grate, @disc, @total, @stock_id, @bill_id, @user, @firm, @qtyh)
   `),
 
   getById: db.prepare(`
@@ -1145,7 +1130,7 @@ export const StockReg = {
 export const Ledger = {
   create: db.prepare(`
     INSERT INTO ledger (firm_id, voucher_id, voucher_type, voucher_no, account_head, account_type, debit_amount, credit_amount, narration, bill_id, party_id, tax_type, tax_rate, transaction_date, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (@firm_id, @voucher_id, @voucher_type, @voucher_no, @account_head, @account_type, @debit_amount, @credit_amount, @narration, @bill_id, @party_id, @tax_type, @tax_rate, @transaction_date, @created_by)
   `),
 
   getById: db.prepare(`
@@ -1181,7 +1166,7 @@ export const Ledger = {
 export const BillSequence = {
   create: db.prepare(`
     INSERT INTO bill_sequences (firm_id, financial_year, last_sequence, voucher_type)
-    VALUES (?, ?, ?, ?)
+    VALUES (@firm_id, @financial_year, @last_sequence, @voucher_type)
   `),
 
   getByFirmAndYear: db.prepare(`
@@ -1190,8 +1175,8 @@ export const BillSequence = {
 
   update: db.prepare(`
     UPDATE bill_sequences 
-    SET last_sequence = ?, updated_at = datetime('now')
-    WHERE firm_id = ? AND financial_year = ? AND (voucher_type IS NULL OR voucher_type = ?)
+    SET last_sequence = @last_sequence, updated_at = datetime('now')
+    WHERE firm_id = @firm_id AND financial_year = @financial_year AND (voucher_type IS NULL OR voucher_type = @voucher_type)
   `)
 };
 
@@ -1199,7 +1184,7 @@ export const BillSequence = {
 export const Settings = {
   create: db.prepare(`
     INSERT INTO settings (setting_key, setting_value, description)
-    VALUES (?, ?, ?)
+    VALUES (@setting_key, @setting_value, @description)
   `),
 
   getByKey: db.prepare(`
@@ -1211,8 +1196,8 @@ export const Settings = {
   `),
 
   update: db.prepare(`
-    UPDATE settings SET setting_value = ?, description = ?, updated_at = datetime('now')
-    WHERE setting_key = ?
+    UPDATE settings SET setting_value = @setting_value, description = @description, updated_at = datetime('now')
+    WHERE setting_key = @setting_key
   `)
 };
 
@@ -1220,7 +1205,7 @@ export const Settings = {
 export const FirmSettings = {
   create: db.prepare(`
     INSERT INTO firm_settings (firm_id, setting_key, setting_value, description)
-    VALUES (?, ?, ?, ?)
+    VALUES (@firm_id, @setting_key, @setting_value, @description)
   `),
 
   getByFirmAndKey: db.prepare(`
@@ -1232,8 +1217,8 @@ export const FirmSettings = {
   `),
 
   update: db.prepare(`
-    UPDATE firm_settings SET setting_value = ?, description = ?, updated_at = datetime('now')
-    WHERE firm_id = ? AND setting_key = ?
+    UPDATE firm_settings SET setting_value = @setting_value, description = @description, updated_at = datetime('now')
+    WHERE firm_id = @firm_id AND setting_key = @setting_key
   `)
 };
 
@@ -1241,12 +1226,6 @@ export const FirmSettings = {
 console.log('✅ Database initialized with multi-firm support and payment tracking');
 
 // Seed super admin on initialization
-try {
-  import('./seed-super-admin.js').then(module => {
-    module.seedSuperAdmin();
-  }).catch(err => {
-    console.log('⚠️  Super admin seeding skipped:', err.message);
-  });
-} catch (err) {
-  console.log('⚠️  Super admin seeding failed:', err.message);
-}
+import('./seed-super-admin.js').then(module => {
+  module.seedSuperAdmin();
+});

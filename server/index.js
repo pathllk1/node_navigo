@@ -1,5 +1,16 @@
 import 'dotenv/config.js'; // Load environment variables from .env file
-import './utils/db.js' // Initialize the database and create tables
+
+// Initialize database with error handling - use dynamic import
+(async () => {
+  try {
+    await import('./utils/db.js'); // Initialize the database and create tables
+  } catch (err) {
+    console.error('⚠️  Database initialization failed:', err.message);
+    console.log('ℹ️  Server will continue running, but database operations may fail');
+    console.log('ℹ️  Please check your Turso connection and try again');
+  }
+})();
+
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";

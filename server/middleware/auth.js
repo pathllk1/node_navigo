@@ -39,6 +39,17 @@ export async function authenticateJWT(req, res, next) {
   // 1️⃣ ACCESS TOKEN VALID → PASS
   try {
     const decoded = jwt.verify(accessToken, JWT_SECRET);
+    
+    // If firm_id is missing from token, fetch from database
+    if (!decoded.firm_id) {
+      console.log('[AUTH] Access token missing firm_id, fetching from database for user:', decoded.id);
+      const user = getUserById.get(decoded.id);
+      if (user) {
+        decoded.firm_id = user.firm_id;
+        decoded.firm_code = user.firm_code;
+      }
+    }
+    
     req.user = decoded;
     return next();
   } catch (accessErr) {

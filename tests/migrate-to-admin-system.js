@@ -44,18 +44,18 @@ try {
 
     const createSuperAdmin = db.prepare(`
       INSERT INTO users (username, email, fullname, password, role, firm_id, status)
-      VALUES (@username, @email, @fullname, @password, @role, @firm_id, @status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    createSuperAdmin.run({
-      username: 'superadmin',
-      email: 'superadmin@system.com',
-      fullname: 'Super Administrator',
-      password: hashedPassword,
-      role: 'super_admin',
-      firm_id: null,
-      status: 'approved'
-    });
+    createSuperAdmin.run(
+      'superadmin',
+      'superadmin@system.com',
+      'Super Administrator',
+      hashedPassword,
+      'super_admin',
+      null,
+      'approved'
+    );
 
     console.log('   ✅ Super admin created\n');
     console.log('   📧 Email: superadmin@system.com');

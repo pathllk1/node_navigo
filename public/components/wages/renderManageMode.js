@@ -141,31 +141,31 @@ export function renderManageMode(ctx) {
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
                   <div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #ef4444;">
                     <div style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">Total Gross Salary</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #059669;">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
+                    <div style="font-size: 16px; font-weight: 700; color: #059669;"><span id="summary-total-gross">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
                       const wage = existingWages.find(w => w.id === wageId);
                       const edited = editedWages[wageId] || wage;
                       return sum + (edited ? edited.gross_salary : 0);
-                    }, 0))}</div>
+                    }, 0))}</span></div>
                   </div>
                   <div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #10b981;">
                     <div style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">Total EPF</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #f59e0b;">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
+                    <div style="font-size: 16px; font-weight: 700; color: #f59e0b;"><span id="summary-total-epf">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
                       const wage = existingWages.find(w => w.id === wageId);
                       const edited = editedWages[wageId] || wage;
                       return sum + (edited ? edited.epf_deduction : 0);
-                    }, 0))}</div>
+                    }, 0))}</span></div>
                   </div>
                   <div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #3b82f6;">
                     <div style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">Total ESIC</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #3b82f6;">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
+                    <div style="font-size: 16px; font-weight: 700; color: #3b82f6;"><span id="summary-total-esic">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
                       const wage = existingWages.find(w => w.id === wageId);
                       const edited = editedWages[wageId] || wage;
                       return sum + (edited ? edited.esic_deduction : 0);
-                    }, 0))}</div>
+                    }, 0))}</span></div>
                   </div>
                   <div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #8b5cf6;">
                     <div style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">Total Net Salary</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #059669;">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
+                    <div style="font-size: 16px; font-weight: 700; color: #059669;"><span id="summary-total-net">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
                       const wage = existingWages.find(w => w.id === wageId);
                       const edited = editedWages[wageId] || wage;
                       return sum + (edited ? calculateNetSalary(
@@ -175,7 +175,7 @@ export function renderManageMode(ctx) {
                         toNumber(edited.other_deduction),
                         toNumber(edited.other_benefit)
                       ) : 0);
-                    }, 0))}</div>
+                    }, 0))}</span></div>
                   </div>
                 </div>
               </div>
@@ -459,7 +459,7 @@ export function renderManageMode(ctx) {
                           />
                         </td>
                         <td style="padding: 10px; text-align: right;">
-                          <span style="font-weight: 500;">${formatCurrency(edited.gross_salary)}</span>
+                          <span id="wage-${wage.id}-gross-display" style="font-weight: 500;">${formatCurrency(edited.gross_salary)}</span>
                         </td>
                         <td style="padding: 10px; text-align: right;">
                           <input 
@@ -510,7 +510,7 @@ export function renderManageMode(ctx) {
                           />
                         </td>
                         <td style="padding: 10px; text-align: right;">
-                          <span style="font-weight: 600; color: #059669;">${formatCurrency(netSalary)}</span>
+                          <span id="wage-${wage.id}-net-display" style="font-weight: 600; color: #059669;">${formatCurrency(netSalary)}</span>
                         </td>
                         <td style="padding: 10px;">
                           <div style="font-size: 11px;">

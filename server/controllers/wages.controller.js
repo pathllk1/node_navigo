@@ -68,6 +68,44 @@ function calculatePerDayWage(gross, wageDays) {
 }
 
 /* --------------------------------------------------
+   PREPARED STATEMENTS - NOW USING POSITIONAL PARAMETERS
+-------------------------------------------------- */
+
+const insertWageStmt = db.prepare(`
+  INSERT INTO wages (
+    firm_id,
+    master_roll_id,
+    p_day_wage,
+    wage_days,
+    project,
+    site,
+    gross_salary,
+    epf_deduction,
+    esic_deduction,
+    other_deduction,
+    other_benefit,
+    net_salary,
+    salary_month,
+    paid_date,
+    cheque_no,
+    paid_from_bank_ac,
+    created_by,
+    updated_by
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
+const checkWageExistsStmt = db.prepare(`
+  SELECT id FROM wages 
+  WHERE firm_id = ? AND master_roll_id = ? AND salary_month = ?
+`);
+
+const getEmployeeDataStmt = db.prepare(`
+  SELECT p_day_wage, project, site 
+  FROM master_rolls 
+  WHERE id = ? AND firm_id = ?
+`);
+
+/* --------------------------------------------------
    CONTROLLER FUNCTIONS
 -------------------------------------------------- */
 
@@ -260,102 +298,92 @@ export async function createWagesBulk(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid month format. Use YYYY-MM' });
     }
 
-    // Start transaction
-    const insertWage = db.transaction((wageData) => {
-      const results = [];
+    // Process wages (without transaction wrapper to avoid rollback issues)
+    const results = [];
 
-      for (const wage of wageData) {
-        try {
-          // Validate required fields
-          if (!wage.master_roll_id || wage.gross_salary === undefined || !wage.wage_days) {
-            results.push({
-              master_roll_id: wage.master_roll_id,
-              success: false,
-              message: 'Missing required fields: master_roll_id, gross_salary, wage_days'
-            });
-            continue;
-          }
-
-          // Check if wage already exists
-          const existingWage = Wage.checkExists.get(firmId, wage.master_roll_id, month);
-          if (existingWage) {
-            results.push({
-              master_roll_id: wage.master_roll_id,
-              success: false,
-              message: 'Wage already exists for this employee in this month'
-            });
-            continue;
-          }
-
-          // Get employee data for additional fields
-          const employee = db.prepare('SELECT p_day_wage, project, site FROM master_rolls WHERE id = ? AND firm_id = ?')
-            .get(wage.master_roll_id, firmId);
-
-          if (!employee) {
-            results.push({
-              master_roll_id: wage.master_roll_id,
-              success: false,
-              message: 'Employee not found'
-            });
-            continue;
-          }
-
-          // Calculate per day wage
-          const perDayWage = calculatePerDayWage(wage.gross_salary, wage.wage_days);
-
-          // Calculate net salary
-          const netSalary = calculateNetSalary(
-            wage.gross_salary,
-            wage.epf_deduction,
-            wage.esic_deduction,
-            wage.other_deduction,
-            wage.other_benefit
-          );
-
-          // Prepare wage insert data
-          const wageInsertData = {
-            firm_id: firmId,
-            master_roll_id: wage.master_roll_id,
-            p_day_wage: perDayWage,
-            wage_days: wage.wage_days,
-            project: employee.project || null,
-            site: employee.site || null,
-            gross_salary: wage.gross_salary,
-            epf_deduction: wage.epf_deduction || 0,
-            esic_deduction: wage.esic_deduction || 0,
-            other_deduction: wage.other_deduction || 0,
-            other_benefit: wage.other_benefit || 0,
-            net_salary: netSalary,
-            salary_month: month,
-            paid_date: wage.paid_date || null,
-            cheque_no: wage.cheque_no || null,
-            paid_from_bank_ac: wage.paid_from_bank_ac || null,
-            created_by: userId,
-            updated_by: userId
-          };
-
-          // Insert wage
-          const result = Wage.create.run(wageInsertData);
-
-          results.push({
-            master_roll_id: wage.master_roll_id,
-            wage_id: result.lastInsertRowid,
-            success: true
-          });
-
-        } catch (error) {
+    for (const wage of wages) {
+      try {
+        // Validate required fields
+        if (!wage.master_roll_id || wage.gross_salary === undefined || !wage.wage_days) {
           results.push({
             master_roll_id: wage.master_roll_id,
             success: false,
-            message: error.message
+            message: 'Missing required fields: master_roll_id, gross_salary, wage_days'
           });
+          continue;
         }
+
+        // Check if wage already exists
+        const existingWage = checkWageExistsStmt.get(firmId, wage.master_roll_id, month);
+        if (existingWage) {
+          results.push({
+            master_roll_id: wage.master_roll_id,
+            success: false,
+            message: 'Wage already exists for this employee in this month'
+          });
+          continue;
+        }
+
+        // Get employee data for additional fields
+        const employee = getEmployeeDataStmt.get(wage.master_roll_id, firmId);
+
+        if (!employee) {
+          results.push({
+            master_roll_id: wage.master_roll_id,
+            success: false,
+            message: 'Employee not found'
+          });
+          continue;
+        }
+
+        // Calculate per day wage
+        const perDayWage = calculatePerDayWage(wage.gross_salary, wage.wage_days);
+
+        // Calculate net salary
+        const netSalary = calculateNetSalary(
+          wage.gross_salary,
+          wage.epf_deduction,
+          wage.esic_deduction,
+          wage.other_deduction,
+          wage.other_benefit
+        );
+
+        // Insert wage with positional parameters
+        const result = insertWageStmt.run(
+          firmId,
+          wage.master_roll_id,
+          perDayWage,
+          wage.wage_days,
+          employee.project || null,
+          employee.site || null,
+          wage.gross_salary,
+          wage.epf_deduction || 0,
+          wage.esic_deduction || 0,
+          wage.other_deduction || 0,
+          wage.other_benefit || 0,
+          netSalary,
+          month,
+          wage.paid_date || null,
+          wage.cheque_no || null,
+          wage.paid_from_bank_ac || null,
+          userId,
+          userId
+        );
+
+        results.push({
+          master_roll_id: wage.master_roll_id,
+          wage_id: result.lastInsertRowid,
+          success: true
+        });
+
+      } catch (error) {
+        results.push({
+          master_roll_id: wage.master_roll_id,
+          success: false,
+          message: error.message
+        });
       }
-
-      return results;
-    });
-
-    const results = insertWage(wages);
+    }
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.filter(r => !r.success).length;
 
@@ -486,97 +514,91 @@ export async function updateWagesBulk(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid wage data. Provide wages array.' });
     }
 
-    // Start transaction
-    const updateWages = db.transaction((wageData) => {
-      const results = [];
+    // Process wage updates (without transaction wrapper to avoid rollback issues)
+    const results = [];
 
-      for (const wage of wageData) {
-        try {
-          // Validate required fields
-          if (!wage.id || !wage.wage_days || wage.gross_salary === undefined) {
-            results.push({
-              id: wage.id,
-              success: false,
-              message: 'Missing required fields: id, wage_days, gross_salary'
-            });
-            continue;
-          }
-
-          // Verify ownership
-          const existingWage = Wage.getById.get(parseInt(wage.id), firmId);
-          if (!existingWage) {
-            results.push({
-              id: wage.id,
-              success: false,
-              message: 'Wage record not found or access denied'
-            });
-            continue;
-          }
-
-          // Calculate new values
-          const perDayWage = calculatePerDayWage(wage.gross_salary, wage.wage_days);
-          const netSalary = calculateNetSalary(
-            wage.gross_salary,
-            wage.epf_deduction,
-            wage.esic_deduction,
-            wage.other_deduction,
-            wage.other_benefit
-          );
-
-          // Update wage
-          const result = db.prepare(`
-            UPDATE wages
-            SET 
-              p_day_wage = ?,
-              wage_days = ?,
-              gross_salary = ?,
-              epf_deduction = ?,
-              esic_deduction = ?,
-              other_deduction = ?,
-              other_benefit = ?,
-              net_salary = ?,
-              paid_date = ?,
-              cheque_no = ?,
-              paid_from_bank_ac = ?,
-              updated_by = ?,
-              updated_at = datetime('now')
-            WHERE id = ? AND firm_id = ?
-          `).run(
-            perDayWage,
-            wage.wage_days,
-            wage.gross_salary,
-            wage.epf_deduction || 0,
-            wage.esic_deduction || 0,
-            wage.other_deduction || 0,
-            wage.other_benefit || 0,
-            netSalary,
-            wage.paid_date || null,
-            wage.cheque_no || null,
-            wage.paid_from_bank_ac || null,
-            userId,
-            parseInt(wage.id),
-            firmId
-          );
-
-          results.push({
-            id: wage.id,
-            success: result.changes > 0,
-            message: result.changes > 0 ? 'Updated' : 'No changes made'
-          });
-
-        } catch (error) {
+    for (const wage of wages) {
+      try {
+        // Validate required fields
+        if (!wage.id || !wage.wage_days || wage.gross_salary === undefined) {
           results.push({
             id: wage.id,
             success: false,
-            message: error.message
+            message: 'Missing required fields: id, wage_days, gross_salary'
           });
+          continue;
         }
+
+        // Verify ownership
+        const existingWage = Wage.getById.get(parseInt(wage.id), firmId);
+        if (!existingWage) {
+          results.push({
+            id: wage.id,
+            success: false,
+            message: 'Wage record not found or access denied'
+          });
+          continue;
+        }
+
+        // Calculate new values
+        const perDayWage = calculatePerDayWage(wage.gross_salary, wage.wage_days);
+        const netSalary = calculateNetSalary(
+          wage.gross_salary,
+          wage.epf_deduction,
+          wage.esic_deduction,
+          wage.other_deduction,
+          wage.other_benefit
+        );
+
+        // Update wage
+        const result = db.prepare(`
+          UPDATE wages
+          SET 
+            p_day_wage = ?,
+            wage_days = ?,
+            gross_salary = ?,
+            epf_deduction = ?,
+            esic_deduction = ?,
+            other_deduction = ?,
+            other_benefit = ?,
+            net_salary = ?,
+            paid_date = ?,
+            cheque_no = ?,
+            paid_from_bank_ac = ?,
+            updated_by = ?,
+            updated_at = datetime('now')
+          WHERE id = ? AND firm_id = ?
+        `).run(
+          perDayWage,
+          wage.wage_days,
+          wage.gross_salary,
+          wage.epf_deduction || 0,
+          wage.esic_deduction || 0,
+          wage.other_deduction || 0,
+          wage.other_benefit || 0,
+          netSalary,
+          wage.paid_date || null,
+          wage.cheque_no || null,
+          wage.paid_from_bank_ac || null,
+          userId,
+          parseInt(wage.id),
+          firmId
+        );
+
+        results.push({
+          id: wage.id,
+          success: result.changes > 0,
+          message: result.changes > 0 ? 'Updated' : 'No changes made'
+        });
+
+      } catch (error) {
+        results.push({
+          id: wage.id,
+          success: false,
+          message: error.message
+        });
       }
-
-      return results;
-    });
-
-    const results = updateWages(wages);
+    }
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.filter(r => !r.success).length;
 
@@ -642,44 +664,38 @@ export async function deleteWagesBulk(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid data. Provide ids array.' });
     }
 
-    // Start transaction
-    const deleteWages = db.transaction((wageIds) => {
-      const results = [];
+    // Process wage deletions (without transaction wrapper to avoid rollback issues)
+    const results = [];
 
-      for (const id of wageIds) {
-        try {
-          // Verify ownership before deleting
-          const existingWage = Wage.getById.get(parseInt(id), firmId);
-          if (!existingWage) {
-            results.push({
-              id: id,
-              success: false,
-              message: 'Wage record not found or access denied'
-            });
-            continue;
-          }
-
-          const result = Wage.delete.run(parseInt(id), firmId);
-
-          results.push({
-            id: id,
-            success: result.changes > 0,
-            message: result.changes > 0 ? 'Deleted' : 'Not found'
-          });
-
-        } catch (error) {
+    for (const id of ids) {
+      try {
+        // Verify ownership before deleting
+        const existingWage = Wage.getById.get(parseInt(id), firmId);
+        if (!existingWage) {
           results.push({
             id: id,
             success: false,
-            message: error.message
+            message: 'Wage record not found or access denied'
           });
+          continue;
         }
+
+        const result = Wage.delete.run(parseInt(id), firmId);
+
+        results.push({
+          id: id,
+          success: result.changes > 0,
+          message: result.changes > 0 ? 'Deleted' : 'Not found'
+        });
+
+      } catch (error) {
+        results.push({
+          id: id,
+          success: false,
+          message: error.message
+        });
       }
-
-      return results;
-    });
-
-    const results = deleteWages(ids);
+    }
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.filter(r => !r.success).length;
 

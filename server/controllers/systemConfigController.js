@@ -68,12 +68,12 @@ export const updateSetting = (req, res) => {
       
       if (existingFirmSetting) {
         // Update existing firm setting
-        const result = FirmSettings.update.run({
-          firm_id: req.user.firm_id,
-          setting_key: key,
+        const result = FirmSettings.update.run(
           setting_value,
-          description: description || existingFirmSetting.description
-        });
+          description || existingFirmSetting.description,
+          req.user.firm_id,
+          key
+        );
         
         if (result.changes === 0) {
           return res.status(400).json({ error: 'No changes made to setting' });
@@ -84,12 +84,12 @@ export const updateSetting = (req, res) => {
         res.json({ message: 'Setting updated successfully', setting: updatedSetting });
       } else {
         // Create new firm setting
-        const result = FirmSettings.create.run({
-          firm_id: req.user.firm_id,
-          setting_key: key,
+        const result = FirmSettings.create.run(
+          req.user.firm_id,
+          key,
           setting_value,
-          description: description || `Firm-specific ${key} setting`
-        });
+          description || `Firm-specific ${key} setting`
+        );
         
         if (result.changes === 0) {
           return res.status(400).json({ error: 'Failed to create setting' });
@@ -107,11 +107,11 @@ export const updateSetting = (req, res) => {
       }
       
       // Update the setting
-      const result = Settings.update.run({
-        setting_key: key,
+      const result = Settings.update.run(
         setting_value,
-        description: description || existingSetting.description
-      });
+        description || existingSetting.description,
+        key
+      );
       
       if (result.changes === 0) {
         return res.status(400).json({ error: 'No changes made to setting' });
@@ -171,20 +171,20 @@ export const toggleGstStatus = (req, res) => {
       
       if (existingFirmSetting) {
         // Update existing firm setting
-        FirmSettings.update.run({
-          firm_id: req.user.firm_id,
-          setting_key: 'gst_enabled',
-          setting_value: settingValue,
-          description: existingFirmSetting.description
-        });
+        FirmSettings.update.run(
+          settingValue,
+          existingFirmSetting.description,
+          req.user.firm_id,
+          'gst_enabled'
+        );
       } else {
         // Create new firm setting
-        FirmSettings.create.run({
-          firm_id: req.user.firm_id,
-          setting_key: 'gst_enabled',
-          setting_value: settingValue,
-          description: 'Firm-specific GST calculation toggle'
-        });
+        FirmSettings.create.run(
+          req.user.firm_id,
+          'gst_enabled',
+          settingValue,
+          'Firm-specific GST calculation toggle'
+        );
       }
     } else {
       // Update global setting if no firm context
@@ -192,18 +192,18 @@ export const toggleGstStatus = (req, res) => {
       
       if (existingSetting) {
         // Update existing setting
-        Settings.update.run({
-          setting_key: 'gst_enabled',
-          setting_value: settingValue,
-          description: existingSetting.description
-        });
+        Settings.update.run(
+          settingValue,
+          existingSetting.description,
+          'gst_enabled'
+        );
       } else {
         // Create new setting
-        Settings.create.run({
-          setting_key: 'gst_enabled',
-          setting_value: settingValue,
-          description: 'Global GST calculation toggle'
-        });
+        Settings.create.run(
+          'gst_enabled',
+          settingValue,
+          'Global GST calculation toggle'
+        );
       }
     }
     

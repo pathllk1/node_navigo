@@ -15,11 +15,11 @@ export const createSetting = (req, res) => {
       return res.status(409).json({ error: 'Setting already exists' });
     }
     
-    const result = Settings.create.run({
+    const result = Settings.create.run(
       setting_key,
       setting_value,
-      description: description || null
-    });
+      description || null
+    );
     
     if (result.changes === 0) {
       return res.status(400).json({ error: 'Failed to create setting' });
@@ -78,11 +78,11 @@ export const updateSetting = (req, res) => {
     }
     
     // Update the setting
-    const result = Settings.update.run({
-      setting_key: key,
+    const result = Settings.update.run(
       setting_value,
-      description: description || existingSetting.description
-    });
+      description || existingSetting.description,
+      key
+    );
     
     if (result.changes === 0) {
       return res.status(400).json({ error: 'No changes made to setting' });

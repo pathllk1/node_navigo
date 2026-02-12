@@ -47,12 +47,12 @@ const getUserByUsername = db.prepare(`
 
 const createUser = db.prepare(`
   INSERT INTO users (username, email, fullname, password, role, firm_id, status)
-  VALUES (@username, @email, @fullname, @password, @role, @firm_id, @status)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
 const createFirm = db.prepare(`
   INSERT INTO firms (name, code, description, status)
-  VALUES (@name, @code, @description, @status)
+  VALUES (?, ?, ?, ?)
 `);
 
 const getFirmByCode = db.prepare(`
@@ -163,15 +163,15 @@ router.post("/auth/register", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user with pending status (requires admin approval)
-    const result = createUser.run({
+    const result = createUser.run(
       username,
       email,
       fullname,
-      password: hashedPassword,
-      role: 'user',
-      firm_id: firm.id,
-      status: 'pending'
-    });
+      hashedPassword,
+      'user',
+      firm.id,
+      'pending'
+    );
 
     res.status(201).json({
       success: true,

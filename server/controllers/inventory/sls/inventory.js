@@ -85,6 +85,9 @@ export const getPartyItemHistory = (req, res) => {
 
 export const createStock = (req, res) => {
     try {
+        console.log('[CREATE_STOCK] User:', req.user);
+        console.log('[CREATE_STOCK] User firm_id:', req.user?.firm_id);
+        
         let { item, pno, batch, oem, hsn, qty, uom, rate, grate, mrp, expiryDate, batches } = req.body;
 
         if ((!batch && !qty && !rate && !mrp && !expiryDate) && batches) {
@@ -121,6 +124,7 @@ export const createStock = (req, res) => {
         
         // Check if user has firm access
         if (!req.user || !req.user.firm_id) {
+            console.error('[CREATE_STOCK] User not associated with firm:', req.user);
             return res.status(403).json({ error: 'User is not associated with any firm' });
         }
         
@@ -166,22 +170,22 @@ export const createStock = (req, res) => {
             const newTotal = newTotalQty * parseFloat(rate);
             
             // Update the stock record
-            Stock.update.run({
-                id: existingStock.id,
-                firm_id: req.user.firm_id,
+            Stock.update.run(
                 item,
-                pno: pno || null,
-                oem: oem || null,
+                pno || null,
+                oem || null,
                 hsn,
-                qty: newTotalQty,
+                newTotalQty,
                 uom,
-                rate: parseFloat(rate),
-                grate: parseFloat(grate),
-                total: newTotal,
-                mrp: mrp ? parseFloat(mrp) : null,
-                batches: JSON.stringify(existingBatches),
-                user: actorUsername
-            });
+                parseFloat(rate),
+                parseFloat(grate),
+                newTotal,
+                mrp ? parseFloat(mrp) : null,
+                JSON.stringify(existingBatches),
+                actorUsername,
+                existingStock.id,
+                req.user.firm_id
+            );
             
             res.json({ id: existingStock.id, message: 'Stock batch updated successfully' });
         } else {
@@ -198,25 +202,50 @@ export const createStock = (req, res) => {
             
             const total = parseFloat(qty) * parseFloat(rate);
 
-            const result = Stock.create.run({
-                firm_id: req.user.firm_id,
-                item,
-                pno: pno || null,
-                oem: oem || null,
-                hsn,
-                qty: parseFloat(qty),
-                uom,
-                rate: parseFloat(rate),
-                grate: parseFloat(grate),
-                total,
-                mrp: mrp ? parseFloat(mrp) : null,
-                batches: JSON.stringify(batchesToStore),
-                user: actorUsername
-            });
+            const firmId = Number(req.user.firm_id); 
 
+        // 1. Create a clean object mapping specifically to your @parameters in db.js
+        const stockData = {
+            firm_id: firmId,
+            item: item,
+            pno: pno || null,
+            oem: oem || null,
+            hsn: hsn,
+            qty: parseFloat(qty) || 0,
+            uom: uom || 'PCS',
+            rate: parseFloat(rate) || 0,
+            grate: parseFloat(grate) || 0,
+            total: (parseFloat(qty) || 0) * (parseFloat(rate) || 0),
+            mrp: mrp ? parseFloat(mrp) : null,
+            batches: JSON.stringify(batchesToStore), // Ensure this is stringified
+            user: actorUsername
+        };
+
+            const stockParams = [
+                req.user.firm_id,           // firm_id
+                item,                       // item
+                pno || null,                // pno
+                oem || null,                // oem
+                hsn,                        // hsn
+                parseFloat(qty),            // qty
+                uom,                        // uom
+                parseFloat(rate),           // rate
+                parseFloat(grate),          // grate
+                total,                      // total
+                mrp ? parseFloat(mrp) : null, // mrp
+                JSON.stringify(batchesToStore), // batches
+                actorUsername               // user
+            ];
+
+
+            const result = Stock.create.run(stockParams);
+
+            console.log('[CREATE_STOCK] Stock created successfully:', result);
             res.json({ id: result.lastInsertRowid, message: 'Stock added successfully' });
         }
     } catch (err) {
+        console.error('[CREATE_STOCK] Error:', err.message);
+        console.error('[CREATE_STOCK] Error details:', err);
         res.status(400).json({ error: err.message });
     }
 };
@@ -310,22 +339,22 @@ export const updateStock = (req, res) => {
         const effectiveRate = parseFloat(rate || currentStock.rate || 0);
         const newTotal = newTotalQty * effectiveRate;
         
-        Stock.update.run({
-            id,
-            firm_id: req.user.firm_id,
+        Stock.update.run(
             item,
-            pno: pno || null,
-            oem: oem || null,
+            pno || null,
+            oem || null,
             hsn,
-            qty: newTotalQty,
+            newTotalQty,
             uom,
-            rate: effectiveRate,
-            grate: parseFloat(grate),
-            total: newTotal,
-            mrp: mrp ? parseFloat(mrp) : null,
-            batches: JSON.stringify(batches),
-            user: actorUsername
-        });
+            effectiveRate,
+            parseFloat(grate),
+            newTotal,
+            mrp ? parseFloat(mrp) : null,
+            JSON.stringify(batches),
+            actorUsername,
+            id,
+            req.user.firm_id
+        );
 
         res.json({ message: 'Stock updated successfully' });
     } catch (err) {
@@ -384,19 +413,19 @@ export const createParty = (req, res) => {
             return res.status(403).json({ error: 'User is not associated with any firm' });
         }
         
-        const result = Party.create.run({
-            firm_id: req.user.firm_id,
+        const result = Party.create.run(
+            req.user.firm_id,
             firm,
-            gstin: gstin || 'UNREGISTERED',
-            contact: contact || null,
-            state: state || '',
-            state_code: state_code || null,
-            addr: addr || null,
-            pin: pin || null,
-            pan: pan || null,
-            usern: actorUsername,
-            supply: state || ''
-        });
+            gstin || 'UNREGISTERED',
+            contact || null,
+            state || '',
+            state_code || null,
+            addr || null,
+            pin || null,
+            pan || null,
+            actorUsername,
+            state || ''
+        );
 
         // Fetch and return the created party with all fields
         const newParty = Party.getById.get(result.lastInsertRowid, req.user.firm_id);
@@ -526,39 +555,39 @@ export const createBill = async (req, res) => {
 
     try {
         // A. Insert Bill Header
-        const billResult = Bill.create.run({
-            firm_id: req.user.firm_id,
-            bno: meta.billNo,
-            bdate: meta.billDate,
-            supply: supplyState,
-            addr: party.addr || '',
-            gstin: party.gstin || 'UNREGISTERED',
-            state: party.state || '',
-            pin: party.pin || null,
-            state_code: party.state_code || null,
+        const billResult = Bill.create.run(
+            req.user.firm_id,
+            meta.billNo,
+            meta.billDate,
+            supplyState,
+            party.addr || '',
+            party.gstin || 'UNREGISTERED',
+            party.state || '',
+            party.pin || null,
+            party.state_code || null,
             gtot,
             ntot,
             rof,
-            btype: meta.billType ? meta.billType.toUpperCase() : 'SALES',
-            usern: actorUsername,
-            firm: party.firm,
-            party_id: party.id || null,
-            oth_chg_json: otherCharges && otherCharges.length > 0 ? JSON.stringify(otherCharges) : null,
-            order_no: meta.referenceNo || null,
-            vehicle_no: meta.vehicleNo || null,
-            dispatch_through: meta.dispatchThrough || null,
-            narration: meta.narration || null,
-            reverse_charge: meta.reverseCharge || 0,
+            meta.billType ? meta.billType.toUpperCase() : 'SALES',
+            actorUsername,
+            party.firm,
+            party.id || null,
+            otherCharges && otherCharges.length > 0 ? JSON.stringify(otherCharges) : null,
+            meta.referenceNo || null,
+            meta.vehicleNo || null,
+            meta.dispatchThrough || null,
+            meta.narration || null,
+            meta.reverseCharge || 0,
             cgst,
             sgst,
             igst,
-            consignee_name: consignee?.name || null,
-            consignee_gstin: consignee?.gstin || null,
-            consignee_address: consignee?.address || null,
-            consignee_state: consignee?.state || null,
-            consignee_pin: consignee?.pin || null,
-            consignee_state_code: consignee?.stateCode || null
-        });
+            consignee?.name || null,
+            consignee?.gstin || null,
+            consignee?.address || null,
+            consignee?.state || null,
+            consignee?.pin || null,
+            consignee?.stateCode || null
+        );
 
         const billId = billResult.lastInsertRowid;
 
@@ -572,72 +601,96 @@ export const createBill = async (req, res) => {
                 throw new Error(`Stock record not found for ID: ${item.stockId} or does not belong to your firm`);
             }
             
+            // Verify firm_id matches (multi-firm safety check)
+            if (stockRecord.firm_id !== req.user.firm_id) {
+                throw new Error(`Stock does not belong to your firm`);
+            }
+            
             // Parse existing batches
             let batches = stockRecord.batches ? JSON.parse(stockRecord.batches) : [];
             
             // Find the specific batch to deduct from
+            // If item.batchIndex is provided, use it (preferred for accuracy)
+            // Otherwise, match by batch value
             let batchIndex = -1;
-            if (item.batch === null || item.batch === undefined || item.batch === '') {
-                // Look for a batch with null/undefined/empty string value
-                batchIndex = batches.findIndex(b => b.batch === null || b.batch === undefined || b.batch === '');
+            
+            if (item.batchIndex !== undefined && item.batchIndex !== null) {
+                // Use the batch index if provided (most accurate)
+                batchIndex = parseInt(item.batchIndex);
+                if (batchIndex < 0 || batchIndex >= batches.length) {
+                    throw new Error(`Invalid batch index ${item.batchIndex} for item ${item.item}`);
+                }
             } else {
-                batchIndex = batches.findIndex(b => b.batch === item.batch);
+                // Match by batch value
+                // For null/empty batches, match the first one with null/empty value
+                if (item.batch === null || item.batch === undefined || item.batch === '') {
+                    // Find first batch with null/empty value
+                    batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
+                } else {
+                    // Find batch with matching batch value
+                    batchIndex = batches.findIndex(b => b.batch === item.batch);
+                }
             }
             
             if (batchIndex === -1) {
-                throw new Error(`Batch ${item.batch} not found for item ${item.item}`);
+                const batchDisplay = item.batch || '(No Batch)';
+                throw new Error(`Batch "${batchDisplay}" not found for item ${item.item}`);
+            }
+            
+            // Verify sufficient quantity in the batch
+            const requestedQty = parseFloat(item.qty);
+            if (batches[batchIndex].qty < requestedQty) {
+                const batchDisplay = item.batch || '(No Batch)';
+                throw new Error(`Insufficient quantity in batch "${batchDisplay}". Available: ${batches[batchIndex].qty}, Requested: ${requestedQty}`);
             }
             
             // Update the specific batch quantity
-            batches[batchIndex].qty -= item.qty;
-            if (batches[batchIndex].qty < 0) {
-                throw new Error(`Insufficient quantity in batch ${item.batch} for item ${item.item}`);
-            }
+            batches[batchIndex].qty -= requestedQty;
             
             // Calculate new total quantity
             const newTotalQty = batches.reduce((sum, b) => sum + b.qty, 0);
             
             // Update the stock record with new batches and total quantity
-            Stock.update.run({
-                id: item.stockId,
-                firm_id: req.user.firm_id,
-                item: stockRecord.item,
-                pno: stockRecord.pno,
-                oem: stockRecord.oem,
-                hsn: stockRecord.hsn,
-                qty: newTotalQty,
-                uom: stockRecord.uom,
-                rate: stockRecord.rate,
-                grate: stockRecord.grate,
-                total: newTotalQty * stockRecord.rate,
-                mrp: stockRecord.mrp,
-                batches: JSON.stringify(batches),
-                user: actorUsername
-            });
+            Stock.update.run(
+                stockRecord.item,
+                stockRecord.pno,
+                stockRecord.oem,
+                stockRecord.hsn,
+                newTotalQty,
+                stockRecord.uom,
+                stockRecord.rate,
+                stockRecord.grate,
+                newTotalQty * stockRecord.rate,
+                stockRecord.mrp,
+                JSON.stringify(batches),
+                actorUsername,
+                item.stockId,
+                req.user.firm_id
+            );
 
             // Insert the stock movement record
-            StockReg.create.run({
-                firm_id: req.user.firm_id,
-                type: 'SALE',
-                bno: meta.billNo,
-                bdate: meta.billDate,
-                supply: supplyState,
-                item: item.item,
-                item_narration: item.narration || null,
-                batch: item.batch || null,
-                hsn: item.hsn,
-                qty: item.qty,
-                uom: item.uom,
-                rate: item.rate,
-                grate: item.grate,
-                disc: item.disc || 0,
-                total: lineTotal,
-                stock_id: item.stockId,
-                bill_id: billId,
-                user: actorUsername,
-                firm: party.firm,
-                qtyh: 0
-            });
+            StockReg.create.run(
+                req.user.firm_id,
+                'SALE',
+                meta.billNo,
+                meta.billDate,
+                supplyState,
+                item.item,
+                item.narration || null,
+                item.batch || null,
+                item.hsn,
+                item.qty,
+                item.uom,
+                item.rate,
+                item.grate,
+                item.disc || 0,
+                lineTotal,
+                item.stockId,
+                billId,
+                actorUsername,
+                party.firm,
+                0
+            );
         }
 
         // D. Ledger Postings
@@ -654,113 +707,103 @@ export const createBill = async (req, res) => {
         };
 
         // 1. Party DR Post
-        Ledger.create.run({
-            firm_id: ledgerBase.firm_id,
-            voucher_id: ledgerBase.voucher_id,
-            voucher_type: ledgerBase.voucher_type,
-            voucher_no: ledgerBase.voucher_no,
-            account_head: party.firm,
-            account_type: 'DEBTOR',
-            debit_amount: ntot,
-            credit_amount: 0,
-            narration: `Sales Bill No: ${meta.billNo}`,
-            bill_id: ledgerBase.bill_id,
-            party_id: party.id || null,
-            tax_type: null,
-            tax_rate: null,
-            transaction_date: ledgerBase.transaction_date,
-            created_by: ledgerBase.created_by,
-            created_at: ledgerBase.created_at,
-            updated_at: ledgerBase.updated_at
-        });
+        Ledger.create.run(
+            ledgerBase.firm_id,
+            ledgerBase.voucher_id,
+            ledgerBase.voucher_type,
+            ledgerBase.voucher_no,
+            party.firm,
+            'DEBTOR',
+            ntot,
+            0,
+            `Sales Bill No: ${meta.billNo}`,
+            ledgerBase.bill_id,
+            party.id || null,
+            null,
+            null,
+            ledgerBase.transaction_date,
+            ledgerBase.created_by
+        );
 
         // 2. GST Posts
         if (cgst > 0) {
-            Ledger.create.run({
-                firm_id: ledgerBase.firm_id,
-                voucher_id: ledgerBase.voucher_id,
-                voucher_type: ledgerBase.voucher_type,
-                voucher_no: ledgerBase.voucher_no,
-                account_head: 'CGST Payable',
-                account_type: 'LIABILITY',
-                debit_amount: 0,
-                credit_amount: cgst,
-                narration: `CGST on Sales Bill No: ${meta.billNo}`,
-                bill_id: ledgerBase.bill_id,
-                party_id: null,
-                tax_type: 'CGST',
-                tax_rate: 9,
-                transaction_date: ledgerBase.transaction_date,
-                created_by: ledgerBase.created_by,
-                created_at: ledgerBase.created_at,
-                updated_at: ledgerBase.updated_at
-            });
+            Ledger.create.run(
+                ledgerBase.firm_id,
+                ledgerBase.voucher_id,
+                ledgerBase.voucher_type,
+                ledgerBase.voucher_no,
+                'CGST Payable',
+                'LIABILITY',
+                0,
+                cgst,
+                `CGST on Sales Bill No: ${meta.billNo}`,
+                ledgerBase.bill_id,
+                null,
+                'CGST',
+                9,
+                ledgerBase.transaction_date,
+                ledgerBase.created_by
+            );
         }
         if (sgst > 0) {
-            Ledger.create.run({
-                firm_id: ledgerBase.firm_id,
-                voucher_id: ledgerBase.voucher_id,
-                voucher_type: ledgerBase.voucher_type,
-                voucher_no: ledgerBase.voucher_no,
-                account_head: 'SGST Payable',
-                account_type: 'LIABILITY',
-                debit_amount: 0,
-                credit_amount: sgst,
-                narration: `SGST on Sales Bill No: ${meta.billNo}`,
-                bill_id: ledgerBase.bill_id,
-                party_id: null,
-                tax_type: 'SGST',
-                tax_rate: 9,
-                transaction_date: ledgerBase.transaction_date,
-                created_by: ledgerBase.created_by,
-                created_at: ledgerBase.created_at,
-                updated_at: ledgerBase.updated_at
-            });
+            Ledger.create.run(
+                ledgerBase.firm_id,
+                ledgerBase.voucher_id,
+                ledgerBase.voucher_type,
+                ledgerBase.voucher_no,
+                'SGST Payable',
+                'LIABILITY',
+                0,
+                sgst,
+                `SGST on Sales Bill No: ${meta.billNo}`,
+                ledgerBase.bill_id,
+                null,
+                'SGST',
+                9,
+                ledgerBase.transaction_date,
+                ledgerBase.created_by
+            );
         }
         if (igst > 0) {
-            Ledger.create.run({
-                firm_id: ledgerBase.firm_id,
-                voucher_id: ledgerBase.voucher_id,
-                voucher_type: ledgerBase.voucher_type,
-                voucher_no: ledgerBase.voucher_no,
-                account_head: 'IGST Payable',
-                account_type: 'LIABILITY',
-                debit_amount: 0,
-                credit_amount: igst,
-                narration: `IGST on Sales Bill No: ${meta.billNo}`,
-                bill_id: ledgerBase.bill_id,
-                party_id: null,
-                tax_type: 'IGST',
-                tax_rate: 18,
-                transaction_date: ledgerBase.transaction_date,
-                created_by: ledgerBase.created_by,
-                created_at: ledgerBase.created_at,
-                updated_at: ledgerBase.updated_at
-            });
+            Ledger.create.run(
+                ledgerBase.firm_id,
+                ledgerBase.voucher_id,
+                ledgerBase.voucher_type,
+                ledgerBase.voucher_no,
+                'IGST Payable',
+                'LIABILITY',
+                0,
+                igst,
+                `IGST on Sales Bill No: ${meta.billNo}`,
+                ledgerBase.bill_id,
+                null,
+                'IGST',
+                18,
+                ledgerBase.transaction_date,
+                ledgerBase.created_by
+            );
         }
 
         // 3. Round Off Post
         if (Math.abs(parseFloat(rof)) > 0) {
             const rofVal = parseFloat(rof);
-            Ledger.create.run({
-                firm_id: ledgerBase.firm_id,
-                voucher_id: ledgerBase.voucher_id,
-                voucher_type: ledgerBase.voucher_type,
-                voucher_no: ledgerBase.voucher_no,
-                account_head: 'Round Off',
-                account_type: 'EXPENSE',
-                debit_amount: rofVal > 0 ? rofVal : 0,
-                credit_amount: rofVal < 0 ? Math.abs(rofVal) : 0,
-                narration: `Round Off on Sales Bill No: ${meta.billNo}`,
-                bill_id: ledgerBase.bill_id,
-                party_id: null,
-                tax_type: null,
-                tax_rate: null,
-                transaction_date: ledgerBase.transaction_date,
-                created_by: ledgerBase.created_by,
-                created_at: ledgerBase.created_at,
-                updated_at: ledgerBase.updated_at
-            });
+            Ledger.create.run(
+                ledgerBase.firm_id,
+                ledgerBase.voucher_id,
+                ledgerBase.voucher_type,
+                ledgerBase.voucher_no,
+                'Round Off',
+                'EXPENSE',
+                rofVal > 0 ? rofVal : 0,
+                rofVal < 0 ? Math.abs(rofVal) : 0,
+                `Round Off on Sales Bill No: ${meta.billNo}`,
+                ledgerBase.bill_id,
+                null,
+                null,
+                null,
+                ledgerBase.transaction_date,
+                ledgerBase.created_by
+            );
         }
 
         // 4. Other Charges Posts
@@ -768,50 +811,46 @@ export const createBill = async (req, res) => {
             otherCharges.forEach(charge => {
                 const chargeAmount = parseFloat(charge.amount) || 0;
                 if (chargeAmount > 0) {
-                    Ledger.create.run({
-                        firm_id: ledgerBase.firm_id,
-                        voucher_id: ledgerBase.voucher_id,
-                        voucher_type: ledgerBase.voucher_type,
-                        voucher_no: ledgerBase.voucher_no,
-                        account_head: charge.type || 'Other Charges',
-                        account_type: 'INCOME',
-                        debit_amount: 0,
-                        credit_amount: chargeAmount,
-                        narration: `${charge.type} on Sales Bill No: ${meta.billNo}`,
-                        bill_id: ledgerBase.bill_id,
-                        party_id: null,
-                        tax_type: null,
-                        tax_rate: null,
-                        transaction_date: ledgerBase.transaction_date,
-                        created_by: ledgerBase.created_by,
-                        created_at: ledgerBase.created_at,
-                        updated_at: ledgerBase.updated_at
-                    });
+                    Ledger.create.run(
+                        ledgerBase.firm_id,
+                        ledgerBase.voucher_id,
+                        ledgerBase.voucher_type,
+                        ledgerBase.voucher_no,
+                        charge.type || 'Other Charges',
+                        'INCOME',
+                        0,
+                        chargeAmount,
+                        `${charge.type} on Sales Bill No: ${meta.billNo}`,
+                        ledgerBase.bill_id,
+                        null,
+                        null,
+                        null,
+                        ledgerBase.transaction_date,
+                        ledgerBase.created_by
+                    );
                 }
             });
         }
 
         // 5. Sales Account Post (To balance the ledger)
         const taxableItemsTotal = cart.reduce((sum, item) => sum + (item.qty * item.rate * (1 - (item.disc || 0)/100)), 0);
-        Ledger.create.run({
-            firm_id: ledgerBase.firm_id,
-            voucher_id: ledgerBase.voucher_id,
-            voucher_type: ledgerBase.voucher_type,
-            voucher_no: ledgerBase.voucher_no,
-            account_head: 'Sales',
-            account_type: 'INCOME',
-            debit_amount: 0,
-            credit_amount: taxableItemsTotal + otherChargesTotal,
-            narration: `Sales Bill No: ${meta.billNo}`,
-            bill_id: ledgerBase.bill_id,
-            party_id: null,
-            tax_type: null,
-            tax_rate: null,
-            transaction_date: ledgerBase.transaction_date,
-            created_by: ledgerBase.created_by,
-            created_at: ledgerBase.created_at,
-            updated_at: ledgerBase.updated_at
-        });
+        Ledger.create.run(
+            ledgerBase.firm_id,
+            ledgerBase.voucher_id,
+            ledgerBase.voucher_type,
+            ledgerBase.voucher_no,
+            'Sales',
+            'INCOME',
+            0,
+            taxableItemsTotal + otherChargesTotal,
+            `Sales Bill No: ${meta.billNo}`,
+            ledgerBase.bill_id,
+            null,
+            null,
+            null,
+            ledgerBase.transaction_date,
+            ledgerBase.created_by
+        );
 
         res.json({ id: billId, billNo: meta.billNo, message: 'Bill created successfully' });
     } catch (err) {
@@ -908,13 +947,21 @@ export const updateBill = async (req, res) => {
             if (stockRecord) {
                 let batches = stockRecord.batches ? JSON.parse(stockRecord.batches) : [];
                 
-                // Find and update the batch
-                const batchIndex = batches.findIndex(b => b.batch === existingItem.batch);
+                // Find and update the batch - use same logic as createBill
+                let batchIndex = -1;
+                if (!existingItem.batch || existingItem.batch === '') {
+                    // Find first batch with null/empty value
+                    batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
+                } else {
+                    batchIndex = batches.findIndex(b => b.batch === existingItem.batch);
+                }
+                
                 if (batchIndex !== -1) {
                     batches[batchIndex].qty += existingItem.qty;
                 } else {
+                    // If batch not found, create it (shouldn't happen in normal flow)
                     batches.push({
-                        batch: existingItem.batch,
+                        batch: existingItem.batch || null,
                         qty: existingItem.qty,
                         rate: existingItem.rate,
                         expiry: null,
@@ -924,22 +971,22 @@ export const updateBill = async (req, res) => {
                 
                 const newTotalQty = batches.reduce((sum, b) => sum + b.qty, 0);
                 
-                Stock.update.run({
-                    id: existingItem.stock_id,
-                    firm_id: req.user.firm_id,
-                    item: stockRecord.item,
-                    pno: stockRecord.pno,
-                    oem: stockRecord.oem,
-                    hsn: stockRecord.hsn,
-                    qty: newTotalQty,
-                    uom: stockRecord.uom,
-                    rate: stockRecord.rate,
-                    grate: stockRecord.grate,
-                    total: newTotalQty * stockRecord.rate,
-                    mrp: stockRecord.mrp,
-                    batches: JSON.stringify(batches),
-                    user: actorUsername
-                });
+                Stock.update.run(
+                    stockRecord.item,
+                    stockRecord.pno,
+                    stockRecord.oem,
+                    stockRecord.hsn,
+                    newTotalQty,
+                    stockRecord.uom,
+                    stockRecord.rate,
+                    stockRecord.grate,
+                    newTotalQty * stockRecord.rate,
+                    stockRecord.mrp,
+                    JSON.stringify(batches),
+                    actorUsername,
+                    existingItem.stock_id,
+                    req.user.firm_id
+                );
             }
         }
 
@@ -991,40 +1038,40 @@ export const updateBill = async (req, res) => {
         ntot = roundedNtot;
 
         // Update Bill Header
-        Bill.update.run({
-            id,
-            firm_id: req.user.firm_id,
-            bno: existingBill.bno,
-            bdate: meta.billDate,
-            supply: party.state || 'Local',
-            addr: party.addr || '',
-            gstin: party.gstin || 'UNREGISTERED',
-            state: party.state || '',
-            pin: party.pin || null,
-            state_code: party.state_code || null,
+        Bill.update.run(
+            existingBill.bno,
+            meta.billDate,
+            party.state || 'Local',
+            party.addr || '',
+            party.gstin || 'UNREGISTERED',
+            party.state || '',
+            party.pin || null,
+            party.state_code || null,
             gtot,
             ntot,
             rof,
-            btype: meta.billType ? meta.billType.toUpperCase() : 'SALES',
-            usern: actorUsername,
-            firm: party.firm,
-            party_id: party.id || null,
-            oth_chg_json: otherCharges && otherCharges.length > 0 ? JSON.stringify(otherCharges) : null,
-            order_no: meta.referenceNo || null,
-            vehicle_no: meta.vehicleNo || null,
-            dispatch_through: meta.dispatchThrough || null,
-            narration: meta.narration || null,
-            reverse_charge: meta.reverseCharge || 0,
+            meta.billType ? meta.billType.toUpperCase() : 'SALES',
+            actorUsername,
+            party.firm,
+            party.id || null,
+            otherCharges && otherCharges.length > 0 ? JSON.stringify(otherCharges) : null,
+            meta.referenceNo || null,
+            meta.vehicleNo || null,
+            meta.dispatchThrough || null,
+            meta.narration || null,
+            meta.reverseCharge || 0,
             cgst,
             sgst,
             igst,
-            consignee_name: consignee?.name || null,
-            consignee_gstin: consignee?.gstin || null,
-            consignee_address: consignee?.address || null,
-            consignee_state: consignee?.state || null,
-            consignee_pin: consignee?.pin || null,
-            consignee_state_code: consignee?.stateCode || null
-        });
+            consignee?.name || null,
+            consignee?.gstin || null,
+            consignee?.address || null,
+            consignee?.state || null,
+            consignee?.pin || null,
+            consignee?.stateCode || null,
+            id,
+            req.user.firm_id
+        );
 
         // Delete existing stock_reg entries
         db.prepare('DELETE FROM stock_reg WHERE bill_id = ? AND firm_id = ?').run(id, req.user.firm_id);
@@ -1038,64 +1085,86 @@ export const updateBill = async (req, res) => {
                 throw new Error(`Stock record not found for ID: ${item.stockId}`);
             }
 
+            // Verify firm_id matches (multi-firm safety check)
+            if (stockRecord.firm_id !== req.user.firm_id) {
+                throw new Error(`Stock does not belong to your firm`);
+            }
+
             let batches = stockRecord.batches ? JSON.parse(stockRecord.batches) : [];
             let batchIndex = -1;
-            if (item.batch === null || item.batch === undefined || item.batch === '') {
-                batchIndex = batches.findIndex(b => b.batch === null || b.batch === undefined || b.batch === '');
+            
+            // Use same batch matching logic as createBill
+            if (item.batchIndex !== undefined && item.batchIndex !== null) {
+                // Use the batch index if provided (most accurate)
+                batchIndex = parseInt(item.batchIndex);
+                if (batchIndex < 0 || batchIndex >= batches.length) {
+                    throw new Error(`Invalid batch index ${item.batchIndex} for item ${item.item}`);
+                }
             } else {
-                batchIndex = batches.findIndex(b => b.batch === item.batch);
+                // Match by batch value
+                if (!item.batch || item.batch === '') {
+                    // Find first batch with null/empty value
+                    batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
+                } else {
+                    batchIndex = batches.findIndex(b => b.batch === item.batch);
+                }
             }
 
             if (batchIndex === -1) {
-                throw new Error(`Batch ${item.batch} not found for item ${item.item}`);
+                const batchDisplay = item.batch || '(No Batch)';
+                throw new Error(`Batch "${batchDisplay}" not found for item ${item.item}`);
             }
 
-            batches[batchIndex].qty -= item.qty;
-            if (batches[batchIndex].qty < 0) {
-                throw new Error(`Insufficient quantity in batch ${item.batch}`);
+            // Verify sufficient quantity in the batch
+            const requestedQty = parseFloat(item.qty);
+            if (batches[batchIndex].qty < requestedQty) {
+                const batchDisplay = item.batch || '(No Batch)';
+                throw new Error(`Insufficient quantity in batch "${batchDisplay}". Available: ${batches[batchIndex].qty}, Requested: ${requestedQty}`);
             }
+
+            batches[batchIndex].qty -= requestedQty;
 
             const newTotalQty = batches.reduce((sum, b) => sum + b.qty, 0);
 
-            Stock.update.run({
-                id: item.stockId,
-                firm_id: req.user.firm_id,
-                item: stockRecord.item,
-                pno: stockRecord.pno,
-                oem: stockRecord.oem,
-                hsn: stockRecord.hsn,
-                qty: newTotalQty,
-                uom: stockRecord.uom,
-                rate: stockRecord.rate,
-                grate: stockRecord.grate,
-                total: newTotalQty * stockRecord.rate,
-                mrp: stockRecord.mrp,
-                batches: JSON.stringify(batches),
-                user: actorUsername
-            });
+            Stock.update.run(
+                stockRecord.item,
+                stockRecord.pno,
+                stockRecord.oem,
+                stockRecord.hsn,
+                newTotalQty,
+                stockRecord.uom,
+                stockRecord.rate,
+                stockRecord.grate,
+                newTotalQty * stockRecord.rate,
+                stockRecord.mrp,
+                JSON.stringify(batches),
+                actorUsername,
+                item.stockId,
+                req.user.firm_id
+            );
 
-            StockReg.create.run({
-                firm_id: req.user.firm_id,
-                type: 'SALE',
-                bno: existingBill.bno,
-                bdate: meta.billDate,
-                supply: party.state || 'Local',
-                item: item.item,
-                item_narration: item.narration || null,
-                batch: item.batch || null,
-                hsn: item.hsn,
-                qty: item.qty,
-                uom: item.uom,
-                rate: item.rate,
-                grate: item.grate,
-                disc: item.disc || 0,
-                total: lineTotal,
-                stock_id: item.stockId,
-                bill_id: id,
-                user: actorUsername,
-                firm: party.firm,
-                qtyh: 0
-            });
+            StockReg.create.run(
+                req.user.firm_id,
+                'SALE',
+                existingBill.bno,
+                meta.billDate,
+                party.state || 'Local',
+                item.item,
+                item.narration || null,
+                item.batch || null,
+                item.hsn,
+                item.qty,
+                item.uom,
+                item.rate,
+                item.grate,
+                item.disc || 0,
+                lineTotal,
+                item.stockId,
+                id,
+                actorUsername,
+                party.firm,
+                0
+            );
         }
 
         // Delete old ledger entries
@@ -1115,112 +1184,102 @@ export const updateBill = async (req, res) => {
         };
 
         // Party DR Post
-        Ledger.create.run({
-            firm_id: ledgerBase.firm_id,
-            voucher_id: ledgerBase.voucher_id,
-            voucher_type: ledgerBase.voucher_type,
-            voucher_no: ledgerBase.voucher_no,
-            account_head: party.firm,
-            account_type: 'DEBTOR',
-            debit_amount: ntot,
-            credit_amount: 0,
-            narration: `Sales Bill No: ${existingBill.bno}`,
-            bill_id: ledgerBase.bill_id,
-            party_id: party.id || null,
-            tax_type: null,
-            tax_rate: null,
-            transaction_date: ledgerBase.transaction_date,
-            created_by: ledgerBase.created_by,
-            created_at: ledgerBase.created_at,
-            updated_at: ledgerBase.updated_at
-        });
+        Ledger.create.run(
+            ledgerBase.firm_id,
+            ledgerBase.voucher_id,
+            ledgerBase.voucher_type,
+            ledgerBase.voucher_no,
+            party.firm,
+            'DEBTOR',
+            ntot,
+            0,
+            `Sales Bill No: ${existingBill.bno}`,
+            ledgerBase.bill_id,
+            party.id || null,
+            null,
+            null,
+            ledgerBase.transaction_date,
+            ledgerBase.created_by
+        );
 
         // GST Posts
         if (cgst > 0) {
-            Ledger.create.run({
-                firm_id: ledgerBase.firm_id,
-                voucher_id: ledgerBase.voucher_id,
-                voucher_type: ledgerBase.voucher_type,
-                voucher_no: ledgerBase.voucher_no,
-                account_head: 'CGST Payable',
-                account_type: 'LIABILITY',
-                debit_amount: 0,
-                credit_amount: cgst,
-                narration: `CGST on Sales Bill No: ${existingBill.bno}`,
-                bill_id: ledgerBase.bill_id,
-                party_id: null,
-                tax_type: 'CGST',
-                tax_rate: 9,
-                transaction_date: ledgerBase.transaction_date,
-                created_by: ledgerBase.created_by,
-                created_at: ledgerBase.created_at,
-                updated_at: ledgerBase.updated_at
-            });
+            Ledger.create.run(
+                ledgerBase.firm_id,
+                ledgerBase.voucher_id,
+                ledgerBase.voucher_type,
+                ledgerBase.voucher_no,
+                'CGST Payable',
+                'LIABILITY',
+                0,
+                cgst,
+                `CGST on Sales Bill No: ${existingBill.bno}`,
+                ledgerBase.bill_id,
+                null,
+                'CGST',
+                9,
+                ledgerBase.transaction_date,
+                ledgerBase.created_by
+            );
         }
         if (sgst > 0) {
-            Ledger.create.run({
-                firm_id: ledgerBase.firm_id,
-                voucher_id: ledgerBase.voucher_id,
-                voucher_type: ledgerBase.voucher_type,
-                voucher_no: ledgerBase.voucher_no,
-                account_head: 'SGST Payable',
-                account_type: 'LIABILITY',
-                debit_amount: 0,
-                credit_amount: sgst,
-                narration: `SGST on Sales Bill No: ${existingBill.bno}`,
-                bill_id: ledgerBase.bill_id,
-                party_id: null,
-                tax_type: 'SGST',
-                tax_rate: 9,
-                transaction_date: ledgerBase.transaction_date,
-                created_by: ledgerBase.created_by,
-                created_at: ledgerBase.created_at,
-                updated_at: ledgerBase.updated_at
-            });
+            Ledger.create.run(
+                ledgerBase.firm_id,
+                ledgerBase.voucher_id,
+                ledgerBase.voucher_type,
+                ledgerBase.voucher_no,
+                'SGST Payable',
+                'LIABILITY',
+                0,
+                sgst,
+                `SGST on Sales Bill No: ${existingBill.bno}`,
+                ledgerBase.bill_id,
+                null,
+                'SGST',
+                9,
+                ledgerBase.transaction_date,
+                ledgerBase.created_by
+            );
         }
         if (igst > 0) {
-            Ledger.create.run({
-                firm_id: ledgerBase.firm_id,
-                voucher_id: ledgerBase.voucher_id,
-                voucher_type: ledgerBase.voucher_type,
-                voucher_no: ledgerBase.voucher_no,
-                account_head: 'IGST Payable',
-                account_type: 'LIABILITY',
-                debit_amount: 0,
-                credit_amount: igst,
-                narration: `IGST on Sales Bill No: ${existingBill.bno}`,
-                bill_id: ledgerBase.bill_id,
-                party_id: null,
-                tax_type: 'IGST',
-                tax_rate: 18,
-                transaction_date: ledgerBase.transaction_date,
-                created_by: ledgerBase.created_by,
-                created_at: ledgerBase.created_at,
-                updated_at: ledgerBase.updated_at
-            });
+            Ledger.create.run(
+                ledgerBase.firm_id,
+                ledgerBase.voucher_id,
+                ledgerBase.voucher_type,
+                ledgerBase.voucher_no,
+                'IGST Payable',
+                'LIABILITY',
+                0,
+                igst,
+                `IGST on Sales Bill No: ${existingBill.bno}`,
+                ledgerBase.bill_id,
+                null,
+                'IGST',
+                18,
+                ledgerBase.transaction_date,
+                ledgerBase.created_by
+            );
         }
 
         // Sales Account Post
         const taxableItemsTotal = cart.reduce((sum, item) => sum + (item.qty * item.rate * (1 - (item.disc || 0)/100)), 0);
-        Ledger.create.run({
-            firm_id: ledgerBase.firm_id,
-            voucher_id: ledgerBase.voucher_id,
-            voucher_type: ledgerBase.voucher_type,
-            voucher_no: ledgerBase.voucher_no,
-            account_head: 'Sales',
-            account_type: 'INCOME',
-            debit_amount: 0,
-            credit_amount: taxableItemsTotal + otherChargesTotal,
-            narration: `Sales Bill No: ${existingBill.bno}`,
-            bill_id: ledgerBase.bill_id,
-            party_id: null,
-            tax_type: null,
-            tax_rate: null,
-            transaction_date: ledgerBase.transaction_date,
-            created_by: ledgerBase.created_by,
-            created_at: ledgerBase.created_at,
-            updated_at: ledgerBase.updated_at
-        });
+        Ledger.create.run(
+            ledgerBase.firm_id,
+            ledgerBase.voucher_id,
+            ledgerBase.voucher_type,
+            ledgerBase.voucher_no,
+            'Sales',
+            'INCOME',
+            0,
+            taxableItemsTotal + otherChargesTotal,
+            `Sales Bill No: ${existingBill.bno}`,
+            ledgerBase.bill_id,
+            null,
+            null,
+            null,
+            ledgerBase.transaction_date,
+            ledgerBase.created_by
+        );
 
         res.json({ message: 'Bill updated successfully' });
     } catch (err) {
@@ -1272,25 +1331,24 @@ export const cancelBill = (req, res) => {
                         mrp: null
                     });
                 }
-
                 const newTotalQty = batches.reduce((sum, b) => sum + b.qty, 0);
 
-                Stock.update.run({
-                    id: item.stock_id,
-                    firm_id: req.user.firm_id,
-                    item: stockRecord.item,
-                    pno: stockRecord.pno,
-                    oem: stockRecord.oem,
-                    hsn: stockRecord.hsn,
-                    qty: newTotalQty,
-                    uom: stockRecord.uom,
-                    rate: stockRecord.rate,
-                    grate: stockRecord.grate,
-                    total: newTotalQty * stockRecord.rate,
-                    mrp: stockRecord.mrp,
-                    batches: JSON.stringify(batches),
-                    user: actorUsername
-                });
+                Stock.update.run(
+                    stockRecord.item,
+                    stockRecord.pno,
+                    stockRecord.oem,
+                    stockRecord.hsn,
+                    newTotalQty,
+                    stockRecord.uom,
+                    stockRecord.rate,
+                    stockRecord.grate,
+                    newTotalQty * stockRecord.rate,
+                    stockRecord.mrp,
+                    JSON.stringify(batches),
+                    actorUsername,
+                    item.stock_id,
+                    req.user.firm_id
+                );
             }
         }
 
@@ -1298,14 +1356,14 @@ export const cancelBill = (req, res) => {
         db.prepare('DELETE FROM ledger WHERE voucher_id = ? AND voucher_type = ? AND firm_id = ?').run(id, 'SALES', req.user.firm_id);
 
         // Update bill status
-        Bill.updateStatus.run({
+        Bill.updateStatus.run(
+            'CANCELLED',
+            reason || null,
+            now(),
+            req.user.id,
             id,
-            firm_id: req.user.firm_id,
-            status: 'CANCELLED',
-            cancellation_reason: reason || null,
-            cancelled_at: now(),
-            cancelled_by: req.user.id
-        });
+            req.user.firm_id
+        );
 
         res.json({ message: 'Bill cancelled successfully' });
     } catch (err) {
@@ -1450,48 +1508,48 @@ export const createStockMovement = (req, res) => {
         const calculatedTotal = total || (qty * (rate || 0));
 
         // Insert the stock movement record
-        StockReg.create.run({
-            firm_id: req.user.firm_id,
+        StockReg.create.run(
+            req.user.firm_id,
             type,
-            bno: referenceNumber || null,
-            bdate: new Date().toISOString().split('T')[0],
-            supply: 'INTERNAL',
-            item: stock.item,
-            item_narration: description || null,
-            batch: batch || null,
-            hsn: stock.hsn,
-            qty: Math.abs(parseFloat(qty)),
-            uom: uom,
-            rate: rate || 0,
-            grate: stock.grate || 0,
-            disc: 0,
-            total: calculatedTotal,
-            stock_id: stockId,
-            bill_id: null,
-            user: actorUsername,
-            firm: stock.firm || 'Internal',
-            qtyh: 0
-        });
+            referenceNumber || null,
+            new Date().toISOString().split('T')[0],
+            'INTERNAL',
+            stock.item,
+            description || null,
+            batch || null,
+            stock.hsn,
+            Math.abs(parseFloat(qty)),
+            uom,
+            rate || 0,
+            stock.grate || 0,
+            0,
+            calculatedTotal,
+            stockId,
+            null,
+            actorUsername,
+            stock.firm || 'Internal',
+            0
+        );
 
         // Update the stock quantity based on movement type
         let newQty = (stock.qty || 0) + Math.abs(parseFloat(qty));
 
-        Stock.update.run({
-            id: stockId,
-            firm_id: req.user.firm_id,
-            item: stock.item,
-            pno: stock.pno,
-            oem: stock.oem,
-            hsn: stock.hsn,
-            qty: newQty,
-            uom: uom || stock.uom,
-            rate: rate || stock.rate,
-            grate: stock.grate,
-            total: newQty * (rate || stock.rate),
-            mrp: stock.mrp,
-            batches: stock.batches,
-            user: actorUsername
-        });
+        Stock.update.run(
+            stock.item,
+            stock.pno,
+            stock.oem,
+            stock.hsn,
+            newQty,
+            uom || stock.uom,
+            rate || stock.rate,
+            stock.grate,
+            newQty * (rate || stock.rate),
+            stock.mrp,
+            stock.batches,
+            actorUsername,
+            stockId,
+            req.user.firm_id
+        );
 
         res.json({ message: `Stock movement (${type}) created successfully` });
     } catch (err) {

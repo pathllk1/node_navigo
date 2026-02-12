@@ -36,21 +36,21 @@ router.post('/create', createWagesBulk);
 // GET /api/wages/manage?month=2025-02
 router.get('/manage', getExistingWagesForMonth);
 
+// Bulk update wages (must come BEFORE /:id route)
+// PUT /api/wages/bulk-update
+// Body: { wages: [{id, wage_days, gross_salary, ...}] }
+router.put('/bulk-update', updateWagesBulk);
+
 // Update single wage (individual edit)
 // PUT /api/wages/:id
 // Body: { wage_days, gross_salary, epf_deduction, ... }
 router.put('/:id', updateWage);
 
-// Bulk update wages
-// PUT /api/wages/bulk-update
-// Body: { wages: [{id, wage_days, gross_salary, ...}] }
-router.put('/bulk-update', updateWagesBulk);
-
 // Delete single wage
 // DELETE /api/wages/:id
 router.delete('/:id', deleteWage);
 
-// Bulk delete wages
+// Bulk delete wages (must come BEFORE /:id route)
 // DELETE /api/wages/bulk-delete
 // Body: { ids: [1, 2, 3, ...] }
 router.delete('/bulk-delete', deleteWagesBulk);

@@ -43,12 +43,12 @@ const getAllUsers = db.prepare(`
 
 const createFirm = db.prepare(`
   INSERT INTO firms (name, code, description, status)
-  VALUES (@name, @code, @description, @status)
+  VALUES (?, ?, ?, ?)
 `);
 
 const createUser = db.prepare(`
   INSERT INTO users (username, email, fullname, password, role, firm_id, status)
-  VALUES (@username, @email, @fullname, @password, @role, @firm_id, @status)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
 /* --------------------------------------------------
@@ -112,23 +112,23 @@ router.post("/firms", authenticateJWT, requireRole('super_admin'), async (req, r
     // Create firm and admin user in a transaction
     const result = db.transaction(() => {
       // Create firm (approved by default when created by super admin)
-      const firmResult = createFirm.run({
-        name: firmName,
-        code: firmCode.toUpperCase(),
-        description: null,
-        status: 'approved'
-      });
+      const firmResult = createFirm.run(
+        firmName,
+        firmCode.toUpperCase(),
+        null,
+        'approved'
+      );
 
       // Create admin user (approved by default)
-      const userResult = createUser.run({
-        username: adminUsername,
-        email: adminEmail,
-        fullname: adminName,
-        password: hashedPassword,
-        role: 'admin',
-        firm_id: firmResult.lastInsertRowid,
-        status: 'approved'
-      });
+      const userResult = createUser.run(
+        adminUsername,
+        adminEmail,
+        adminName,
+        hashedPassword,
+        'admin',
+        firmResult.lastInsertRowid,
+        'approved'
+      );
 
       return {
         firmId: firmResult.lastInsertRowid,
@@ -171,7 +171,7 @@ router.patch("/firms/:id/status", authenticateJWT, requireRole('super_admin'), (
       });
     }
 
-    Firm.updateStatus.run({ id, status });
+    Firm.updateStatus.run(status, id);
 
     res.json({ 
       success: true, 
@@ -222,7 +222,7 @@ router.patch("/users/:id/status", authenticateJWT, requireRole('super_admin'), (
       });
     }
 
-    User.updateStatus.run({ id, status });
+    User.updateStatus.run(status, id);
 
     res.json({ 
       success: true, 
