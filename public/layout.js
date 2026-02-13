@@ -61,7 +61,7 @@ export function Layout(innerHtml, currentUser = null) {
           </a>
         </li>
         <li>
-          <a href="/inventory/sls" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-purple-500 rounded" data-tooltip="Sales Inventory">
+          <a href="/inventory/sls/dash" data-navigo class="sidebar-item flex items-center px-4 py-3 cursor-pointer hover:bg-purple-500 rounded" data-tooltip="Sales Inventory">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
   <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0A24.015 24.015 0 0 1 12 21m0 0H7.5m0 0H5.25M3 18.25V9m18 0V9m0 0H21m-3-2.25V5.25A2.25 2.25 0 0 0 15.75 3h-7.5A2.25 2.25 0 0 0 6 5.25v3.75M9 6.75h6" />
 </svg>

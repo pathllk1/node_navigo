@@ -1,4 +1,4 @@
-import { Stock, Party, Bill, StockReg, Ledger, Settings, FirmSettings, db } from '../../../utils/db.js';
+import { Stock, Party, Bill, StockReg, Ledger, Settings, FirmSettings, Firm, db } from '../../../utils/db.js';
 import { getNextBillNumber, previewNextBillNumber } from '../../../utils/billNumberGenerator.js';
 
 // Helper to get current ISO time
@@ -551,15 +551,17 @@ export const createBill = async (req, res) => {
     const roundedNtot = Math.round(ntot);
     const rof = (roundedNtot - ntot).toFixed(2);
     ntot = roundedNtot;
-    const supplyState = party.state || 'Local';
-
     try {
+        // Get firm name for the bill
+        const firmRecord = Firm.getById.get(req.user.firm_id);
+        const firmName = firmRecord ? firmRecord.name : '';
+
         // A. Insert Bill Header
         const billResult = Bill.create.run(
             req.user.firm_id,
             meta.billNo,
             meta.billDate,
-            supplyState,
+            party.firm,
             party.addr || '',
             party.gstin || 'UNREGISTERED',
             party.state || '',
@@ -570,7 +572,7 @@ export const createBill = async (req, res) => {
             rof,
             meta.billType ? meta.billType.toUpperCase() : 'SALES',
             actorUsername,
-            party.firm,
+            firmName,
             party.id || null,
             otherCharges && otherCharges.length > 0 ? JSON.stringify(otherCharges) : null,
             meta.referenceNo || null,
@@ -674,7 +676,7 @@ export const createBill = async (req, res) => {
                 'SALE',
                 meta.billNo,
                 meta.billDate,
-                supplyState,
+                party.firm,
                 item.item,
                 item.narration || null,
                 item.batch || null,

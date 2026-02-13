@@ -328,7 +328,7 @@ export const generateInvoicePDF = async (req, res) => {
                                 { text: partyLabels.billTo, style: 'boxTitle' },
                                 {
                                     stack: [
-                                        { text: bill.firm || '', bold: true },
+                                        { text: bill.supply || '', bold: true },
                                         { text: formattedBuyerAddress },
                                         { text: bill.state ? `State: ${bill.state}` : '' },
                                         { text: bill.gstin ? `GSTIN: ${bill.gstin}${bill.pin ? ` | PIN: ${bill.pin}` : ''}` : (bill.pin ? `PIN: ${bill.pin}` : '') }
