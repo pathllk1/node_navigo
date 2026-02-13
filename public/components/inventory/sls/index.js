@@ -154,6 +154,14 @@ export function initSalesSystem() {
                             <label class="text-[10px] text-gray-500 font-bold">Reference / PO No</label>
                             <input type="text" id="reference-no" value="${state.meta.referenceNo}" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="e.g. PO-2025-001">
                         </div>
+                        <div>
+                            <label class="text-[10px] text-gray-500 font-bold">Vehicle No</label>
+                            <input type="text" id="vehicle-no" value="${state.meta.vehicleNo}" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="e.g. KA01AB1234">
+                        </div>
+                        <div>
+                            <label class="text-[10px] text-gray-500 font-bold">Narration</label>
+                            <textarea id="narration" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none h-20 resize-none" placeholder="Additional notes...">${state.meta.narration}</textarea>
+                        </div>
                     </div>
                 </div>
 
@@ -471,6 +479,8 @@ export function initSalesSystem() {
             };
         }
 
+        state.meta.vehicle_no= '';
+
         // Reverse charge toggle
         const reverseChargeToggle = document.getElementById('reverse-charge-toggle');
         if (reverseChargeToggle) {
@@ -562,6 +572,30 @@ export function initSalesSystem() {
             consigneeInstructionsInput.oninput = (e) => {
                 if (!state.selectedConsignee) state.selectedConsignee = {};
                 state.selectedConsignee.deliveryInstructions = e.target.value;
+            };
+        }
+
+        // Vehicle number input
+        const vehicleNoInput = document.getElementById('vehicle-no');
+        if (vehicleNoInput) {
+            vehicleNoInput.oninput = (e) => {
+                state.meta.vehicleNo = e.target.value;
+            };
+        }
+
+        // Narration input
+        const narrationInput = document.getElementById('narration');
+        if (narrationInput) {
+            narrationInput.oninput = (e) => {
+                state.meta.narration = e.target.value;
+            };
+        }
+
+        // Dispatch through input
+        const dispatchThroughInput = document.getElementById('dispatch-through');
+        if (dispatchThroughInput) {
+            dispatchThroughInput.oninput = (e) => {
+                state.meta.dispatchThrough = e.target.value;
             };
         }
     }

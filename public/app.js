@@ -12,6 +12,7 @@ import { initSalesSystem } from "./components/inventory/sls/index.js";
 import { SettingsPage } from "./pages/settings.js";
 import { SlsDashPage } from "./pages/inventory/sls-dash.js";
 import { SlsRptPage } from "./pages/inventory/sls-rpt.js";
+import { StockPage } from "./pages/inventory/sts-rpt.js";
 
 
 import { Layout } from "./layout.js";
@@ -94,6 +95,7 @@ router
   .on("/inventory/sls", () => renderPage({ html: '<div id="sales-system"></div>', scripts: () => initSalesSystem() }))
   .on("/inventory/sls/dash", () => renderPage(SlsDashPage()))
   .on("/inventory/sls/rpt", () => renderPage(SlsRptPage()))
+  .on("/inventory/sls/sts", () => renderPage(StockPage()))  
   .on("/tst", () => renderPage(TstPage()))
   .on("/not-found", () =>
     renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => { } })

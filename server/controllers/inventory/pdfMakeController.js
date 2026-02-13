@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Bill, StockReg } from '../../utils/db.js';
+import { db } from '../../utils/db.js';
 import PrinterModule from 'pdfmake/js/Printer.js';
 
 const PdfPrinter = PrinterModule.default;
@@ -19,7 +20,7 @@ const getFontPath = (fileName) => {
 // Verify font files exist before initializing printer
 const fontFiles = [
     'DejaVuSans.ttf',
-    'DejaVuSans-Bold.ttf', 
+    'DejaVuSans-Bold.ttf',
     'DejaVuSans-Oblique.ttf',
     'DejaVuSans-BoldOblique.ttf'
 ];
@@ -75,28 +76,28 @@ const formatDate = (dateString) => {
 
 const numberToWords = (num) => {
     if (!num || isNaN(num)) return "Rupees Zero Only";
-    
+
     const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
     const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
     const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-    
+
     const convertHundreds = (n) => {
         let str = '';
         const numVal = Math.floor(n);
         if (numVal > 99) {
-            str += ones[Math.floor(numVal/100)] + ' Hundred ';
+            str += ones[Math.floor(numVal / 100)] + ' Hundred ';
             return str + convertTens(numVal % 100);
         }
         return convertTens(numVal);
     };
-    
+
     const convertTens = (n) => {
         let str = '';
         const numVal = Math.floor(n);
         if (numVal < 20) {
             return ones[numVal] || teens[numVal - 10] || '';
         }
-        str += tens[Math.floor(numVal/10)];
+        str += tens[Math.floor(numVal / 10)];
         if (numVal % 10 > 0) {
             str += ' ' + ones[numVal % 10];
         }
@@ -106,45 +107,45 @@ const numberToWords = (num) => {
     const absNum = Math.abs(Number(num));
     const wholePart = Math.floor(absNum);
     const decimalPart = Math.round((absNum - wholePart) * 100);
-    
+
     if (wholePart === 0 && decimalPart === 0) return "Rupees Zero Only";
 
     let result = "Rupees ";
     let tempWhole = wholePart;
-    
+
     if (tempWhole >= 10000000) {
-        const crores = Math.floor(tempWhole/10000000);
+        const crores = Math.floor(tempWhole / 10000000);
         result += convertHundreds(crores) + ' Crore ';
         tempWhole %= 10000000;
     }
-    
+
     if (tempWhole >= 100000) {
-        const lakhs = Math.floor(tempWhole/100000);
+        const lakhs = Math.floor(tempWhole / 100000);
         result += convertHundreds(lakhs) + ' Lakh ';
         tempWhole %= 100000;
     }
-    
+
     if (tempWhole >= 1000) {
-        const thousands = Math.floor(tempWhole/1000);
+        const thousands = Math.floor(tempWhole / 1000);
         result += convertHundreds(thousands) + ' Thousand ';
         tempWhole %= 1000;
     }
-    
+
     if (tempWhole > 0) {
         result += convertHundreds(tempWhole);
     }
-    
+
     if (decimalPart > 0) {
         result += " and " + convertTens(decimalPart) + " Paise ";
     }
-    
+
     return result.trim() + " Only";
 };
 
 const getInvoiceTypeLabel = (bill) => {
     if (bill.btype) {
         const billType = bill.btype.toUpperCase();
-        switch(billType) {
+        switch (billType) {
             case 'SALES': return 'SALES INVOICE';
             case 'PURCHASE': return 'PURCHASE INVOICE';
             case 'CREDIT NOTE': return 'CREDIT NOTE';
@@ -158,7 +159,7 @@ const getInvoiceTypeLabel = (bill) => {
 
 const getPartyLabels = (bill) => {
     const type = bill.btype?.toUpperCase() || 'SALES';
-    switch(type) {
+    switch (type) {
         case 'SALES': return { billTo: 'Bill To (Buyer)', shipTo: 'Ship To (Consignee)' };
         case 'PURCHASE': return { billTo: 'Bill From (Supplier)', shipTo: 'Bill To (Receiver)' };
         case 'CREDIT NOTE': return { billTo: 'Bill To (Recipient)', shipTo: 'Ship To (Consignee)' };
@@ -185,11 +186,11 @@ const buildHsnSummary = (bill, items, otherCharges, gstEnabled) => {
         const hsn = item.hsn || 'NA';
         const taxableValue = (item.qty || 0) * (item.rate || 0) * (1 - (item.disc || 0) / 100);
         const taxAmount = taxableValue * (item.grate || 0) / 100;
-        
+
         if (!hsnMap.has(hsn)) {
             hsnMap.set(hsn, { hsn, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, totalTax: 0 });
         }
-        
+
         const row = hsnMap.get(hsn);
         row.taxableValue += taxableValue;
         if (gstEnabled) {
@@ -207,11 +208,11 @@ const buildHsnSummary = (bill, items, otherCharges, gstEnabled) => {
         const hsn = charge.hsnSac || '9999';
         const taxableValue = charge.amount || 0;
         const taxAmount = charge.gstAmount || 0;
-        
+
         if (!hsnMap.has(hsn)) {
             hsnMap.set(hsn, { hsn, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, totalTax: 0 });
         }
-        
+
         const row = hsnMap.get(hsn);
         row.taxableValue += taxableValue;
         if (gstEnabled) {
@@ -236,6 +237,9 @@ export const generateInvoicePDF = async (req, res) => {
 
         // Get firm_id from authenticated user
         const firmId = req.user?.firm_id;
+
+
+
         console.log('PDF Request - firmId:', firmId);
         if (!firmId) return res.status(401).json({ error: 'Unauthorized - No firm associated' });
 
@@ -244,7 +248,7 @@ export const generateInvoicePDF = async (req, res) => {
         if (!bill) return res.status(404).json({ error: 'Bill not found' });
 
         const items = StockReg.getByBillId.all(billId, firmId);
-        
+
         let otherCharges = [];
         if (bill.oth_chg_json) {
             try { otherCharges = JSON.parse(bill.oth_chg_json) || []; } catch (e) { otherCharges = []; }
@@ -254,23 +258,40 @@ export const generateInvoicePDF = async (req, res) => {
         const gstEnabled = true;
 
         // Seller info - using bill firm name as placeholder
-        const seller = { name: bill.firm || 'Company Name', address: 'Address', gstin: bill.gstin || '' };
+        let firmAddress = '';
+        let firmGstin = '';
+
+        try {
+            const firm = db.prepare('SELECT * FROM firms WHERE id = ?').get(firmId);
+
+            if (!firm) {
+                return res.status(404).json({ error: 'Firm not found' });
+            }
+
+            firmAddress = firm.address || '';
+            firmGstin = firm.gst_number || '';
+        } catch (err) {
+            console.error('Error fetching firm:', err.message);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+
+        const seller = { name: bill.firm || 'Company Name', address: firmAddress, gstin: firmGstin || '' };
 
         const billType = getBillType(bill);
         const partyLabels = getPartyLabels(bill);
         const hsnSummary = buildHsnSummary(bill, items, otherCharges, gstEnabled);
-        
+
         const formattedBuyerAddress = bill.addr && bill.pin ? `${bill.addr}, PIN: ${bill.pin}` : (bill.addr || `PIN: ${bill.pin}`);
-        const formattedConsigneeAddress = (bill.consignee_address || bill.addr) && (bill.consignee_pin || bill.pin) ? 
-            `${bill.consignee_address || bill.addr}, PIN: ${bill.consignee_pin || bill.pin}` : 
+        const formattedConsigneeAddress = (bill.consignee_address || bill.addr) && (bill.consignee_pin || bill.pin) ?
+            `${bill.consignee_address || bill.addr}, PIN: ${bill.consignee_pin || bill.pin}` :
             ((bill.consignee_address || bill.addr) || `PIN: ${bill.consignee_pin || bill.pin}`);
-        
+
         const taxableValue = bill.gtot || 0;
         const totalTax = gstEnabled ? ((bill.cgst || 0) + (bill.sgst || 0) + (bill.igst || 0)) : 0;
         const grandTotal = gstEnabled ? (bill.ntot || 0) : taxableValue;
         const roundedGrandTotal = Math.round(grandTotal);
         const roundOff = roundedGrandTotal - grandTotal;
-        
+
         // Build Doc Definition
         const docDefinition = {
             defaultStyle: {
@@ -318,7 +339,7 @@ export const generateInvoicePDF = async (req, res) => {
                     ]
                 },
                 { canvas: [{ type: 'line', x1: 0, y1: 10, x2: 515, y2: 10, lineWidth: 1, lineColor: '#E5E7EB' }], margin: [0, 5, 0, 10] },
-                
+
                 // Party Details
                 {
                     columns: [
@@ -356,7 +377,7 @@ export const generateInvoicePDF = async (req, res) => {
                     ],
                     margin: [0, 0, 0, 15]
                 },
-                
+
                 // Items Table
                 {
                     table: {
@@ -421,7 +442,7 @@ export const generateInvoicePDF = async (req, res) => {
                         paddingBottom: () => 6
                     }
                 },
-                
+
                 // HSN Summary
                 ...(hsnSummary.length > 0 && gstEnabled ? [
                     { text: 'HSN/SAC Summary', style: 'boxTitle', margin: [0, 15, 0, 5] },
@@ -459,7 +480,7 @@ export const generateInvoicePDF = async (req, res) => {
                         }
                     }
                 ] : []),
-                
+
                 // Footer Section
                 {
                     columns: [
@@ -508,7 +529,7 @@ export const generateInvoicePDF = async (req, res) => {
                         }
                     ]
                 },
-                
+
                 // Signatures
                 {
                     columns: [
@@ -552,7 +573,7 @@ export const generateInvoicePDF = async (req, res) => {
 
         const pdfDoc = await printer.createPdfKitDocument(docDefinition);
         console.log('PDF document created successfully');
-        
+
         const safeBillNo = String(bill.bno || `BILL-${bill.id}`).replace(/[^a-zA-Z0-9._-]/g, '_');
         const filename = `Invoice_${safeBillNo}.pdf`;
         console.log('PDF filename:', filename);
@@ -562,7 +583,7 @@ export const generateInvoicePDF = async (req, res) => {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
-        
+
         pdfDoc.pipe(res);
         pdfDoc.on('end', () => {
             console.log('PDF generation completed');

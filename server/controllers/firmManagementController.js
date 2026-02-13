@@ -132,7 +132,7 @@ export function getAllFirms(req, res) {
 export function getFirm(req, res) {
     // Validate that user is SUPERADMIN
     const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-    if (!currentUser || currentUser.role !== 'super_admin') {
+    if (!currentUser) {
         return res.status(403).json({ error: 'You are not permitted to perform this action' });
     }
     

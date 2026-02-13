@@ -1,6 +1,7 @@
 import express from 'express';
 import * as inventoryController from '../../controllers/inventory/sls/inventory.js';
 import { generateInvoicePDF } from '../../controllers/inventory/pdfMakeController.js';
+import * as firmManagementController from "../../controllers/firmManagementController.js";
 
 const router = express.Router();
 
@@ -36,5 +37,6 @@ router.get('/current-firm', inventoryController.getCurrentUserFirmName);
 router.get('/party-balance/:partyId', inventoryController.getPartyBalance);
 router.post('/gst-lookup', inventoryController.lookupGST);
 router.get('/lookup-gst', inventoryController.lookupGST);
+router.get("/firm-management/firms/:id", firmManagementController.getFirm);
 
 export default router;

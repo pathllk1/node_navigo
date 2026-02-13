@@ -22,8 +22,40 @@ export function SlsRptPage() {
 function scripts() {
     const iframe = document.getElementById("agGridFrame");
 
-    // Listen for iframe ready signal
+    // Listen for messages from iframe
     window.addEventListener('message', (event) => {
+      // Handle PDF print request from iframe
+      if (event.data?.action === 'PRINT_PDF') {
+        const billId = event.data.billId;
+        console.log('Received print request for bill ID:', billId);
+        
+        const pdfUrl = `/api/inventory/sales/bills/${billId}/pdf`;
+        
+        fetch(pdfUrl)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.blob();
+          })
+          .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `bill-${billId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(link);
+          })
+          .catch(err => {
+            console.error('Failed to download PDF:', err);
+            alert('Failed to download PDF. Please check the console for details.');
+          });
+        return;
+      }
+
+      // Handle iframe ready signal
       if (event.data === 'IFRAME_READY') {
         console.log('Iframe ready, fetching data...');
         // Now fetch data and send to iframe
@@ -63,6 +95,17 @@ function scripts() {
                 <button onclick="closeModal()" class="text-2xl text-gray-500 hover:bg-gray-100 w-8 h-8 flex items-center justify-center rounded-lg transition">&times;</button>
               </div>
               <div id="modalBody" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+              <div class="flex gap-3 justify-end mt-6 pt-4 border-t-2">
+                <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition font-medium">
+                  Close
+                </button>
+                <button id="printBtn" onclick="printBillPDF()" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition font-medium flex items-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                  </svg>
+                  Print PDF
+                </button>
+              </div>
             </div>
           </div>
           
@@ -71,12 +114,14 @@ function scripts() {
             console.log('Iframe script starting...');
             const eGridDiv = document.getElementById('myGrid');
             let globalRowData = []; // Store data locally to access by ID
+            let currentBillId = null; // Store the current bill ID being viewed
 
             // Modal functions
             window.showModal = function(id) {
               const rowData = globalRowData.find(r => String(r.id) === String(id));
               if(!rowData) return;
 
+              currentBillId = id; // Store bill ID for print function
               const modal = document.getElementById('modal');
               const modalBody = document.getElementById('modalBody');
               
@@ -111,6 +156,17 @@ function scripts() {
               const modal = document.getElementById('modal');
               modal.classList.add('hidden');
               modal.classList.remove('flex');
+              currentBillId = null;
+            };
+
+            // Print PDF function - sends bill ID to parent
+            window.printBillPDF = function() {
+              if (!currentBillId) {
+                alert('No bill selected');
+                return;
+              }
+              // Send message to parent page with bill ID
+              window.parent.postMessage({ action: 'PRINT_PDF', billId: currentBillId }, '*');
             };
             
             document.getElementById('modal').addEventListener('click', function(e) {
