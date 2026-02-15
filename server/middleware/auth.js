@@ -23,42 +23,40 @@ const getRefreshTokens = db.prepare(`
  * Validates access token and automatically refreshes if needed
  */
 export async function authenticateJWT(req, res, next) {
-  const authHeader = req.headers.authorization;
-  const refreshToken = req.headers["x-refresh-token"];
+  const accessToken = req.cookies.accessToken;
+  const refreshToken = req.cookies.refreshToken;
 
-  const accessToken =
-    authHeader && authHeader.startsWith("Bearer ")
-      ? authHeader.split(" ")[1]
-      : null;
+  console.log('authenticateJWT called, cookies received:', {
+    accessToken: !!req.cookies.accessToken,
+    refreshToken: !!req.cookies.refreshToken
+  });
 
-  // ❌ No access token at all
-  if (!accessToken) {
-    return res.status(401).json({ error: "Unauthorized: No access token" });
-  }
-
-  // 1️⃣ ACCESS TOKEN VALID → PASS
-  try {
-    const decoded = jwt.verify(accessToken, JWT_SECRET);
-    
-    // If firm_id is missing from token, fetch from database
-    if (!decoded.firm_id) {
-      console.log('[AUTH] Access token missing firm_id, fetching from database for user:', decoded.id);
-      const user = getUserById.get(decoded.id);
-      if (user) {
-        decoded.firm_id = user.firm_id;
-        decoded.firm_code = user.firm_code;
+  if (req.cookies.accessToken) {
+    try {
+      const decoded = jwt.verify(req.cookies.accessToken, JWT_SECRET);
+      console.log('Access token valid, proceeding');
+      
+      // If firm_id is missing from token, fetch from database
+      if (!decoded.firm_id) {
+        console.log('[AUTH] Access token missing firm_id, fetching from database for user:', decoded.id);
+        const user = getUserById.get(decoded.id);
+        if (user) {
+          decoded.firm_id = user.firm_id;
+          decoded.firm_code = user.firm_code;
+        }
       }
+      
+      req.user = decoded;
+      return next();
+    } catch (accessErr) {
+      console.log('Access token invalid, trying refresh');
     }
-    
-    req.user = decoded;
-    return next();
-  } catch (accessErr) {
-    // Access token invalid → try refresh
   }
 
-  // 2️⃣ ACCESS INVALID + NO REFRESH → REJECT
-  if (!refreshToken) {
-    return res.status(401).json({ error: "Unauthorized: Token expired" });
+  // 2️⃣ ACCESS INVALID/MISSING → TRY REFRESH
+  if (!req.cookies.refreshToken) {
+    console.log('No refresh token, unauthorized');
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   // 3️⃣ VERIFY REFRESH TOKEN
@@ -67,50 +65,38 @@ export async function authenticateJWT(req, res, next) {
     const user = getUserById.get(refreshPayload.id);
 
     if (!user) {
+      console.log('User not found for refresh');
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     // Check if firm is still approved
     if (user.firm_id && user.firm_status !== 'approved') {
+      console.log('Firm not approved for refresh');
       return res.status(403).json({ error: "Firm access revoked" });
     }
 
     // Check if user is still approved
     if (user.status !== 'approved') {
+      console.log('User not approved for refresh');
       return res.status(403).json({ error: "User access revoked" });
     }
 
-    // Check refresh token exists (hashed) in database
+    // Verify refresh token exists in database
     const storedTokens = getRefreshTokens.all(user.id);
     const isValidRefresh = await Promise.any(
       storedTokens.map(rt => bcrypt.compare(refreshToken, rt.token_hash))
     ).catch(() => false);
 
-    // ❌ Refresh invalid
+
     if (!isValidRefresh) {
+      console.log('Refresh token invalid');
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    console.log('Refresh successful, generating new access token');
+
     // 4️⃣ ACCESS INVALID + REFRESH VALID → ISSUE NEW ACCESS TOKEN
-    const newAccessToken = jwt.sign(
-      { 
-        id: user.id, 
-        username: user.username,
-        email: user.email,
-        fullname: user.fullname,
-        role: user.role,
-        firm_id: user.firm_id,
-        firm_code: user.firm_code
-      },
-      JWT_SECRET,
-      { expiresIn: "15m" }
-    );
-
-    // Attach new token to response
-    res.setHeader("x-access-token", newAccessToken);
-
-    // Attach user to request
-    req.user = { 
+    const payload = { 
       id: user.id, 
       username: user.username,
       email: user.email,
@@ -119,6 +105,19 @@ export async function authenticateJWT(req, res, next) {
       firm_id: user.firm_id,
       firm_code: user.firm_code
     };
+    
+    // Sign the new access token
+    const newAccessToken = jwt.sign(
+      payload,
+      JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+    
+    // Decode the new token to get the actual expiration time
+    const decodedNewToken = jwt.decode(newAccessToken);
+    
+    // Attach user to request with the actual expiration from the token
+    req.user = decodedNewToken;
 
     return next();
   } catch (refreshErr) {

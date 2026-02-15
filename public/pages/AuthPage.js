@@ -1,8 +1,6 @@
 import { clearAccessTokenTimer } from "../api.js";
 
-export function AuthPage(onAuthSuccess) {
-  // Check if a user is logged in
-  const user = JSON.parse(localStorage.getItem("currentUser"));
+export function AuthPage(onAuthSuccess, user = null) {
   const accessToken = localStorage.getItem("accessToken");
 
   let html = "";
@@ -10,119 +8,206 @@ export function AuthPage(onAuthSuccess) {
   if (user) {
     // User is logged in → show welcome message + firm users + settings
     html = `
-      <div class="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] space-y-6">
-        <div class="w-full max-w-2xl p-6 bg-white rounded-xl shadow-lg text-center">
-          <h2 class="text-2xl font-semibold text-purple-700 mb-4">Welcome, ${user.fullname}!</h2>
-          <p class="text-gray-600 mb-2"><strong>Firm:</strong> ${user.firm_name || 'System Admin'} ${user.firm_code ? `(${user.firm_code})` : ''}</p>
-          <p class="text-gray-600 mb-2"><strong>Role:</strong> ${user.role}</p>
-          <p class="text-gray-600 mb-4"><strong>Email:</strong> ${user.email}</p>
+      <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto space-y-8">
           
+          <!-- Welcome Header Card -->
+          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4">
+              <div class="flex items-center space-x-3">
+                <div class="flex-shrink-0">
+                  <div class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                    <span class="text-white font-bold text-lg">${user.fullname.charAt(0).toUpperCase()}</span>
+                  </div>
+                </div>
+                <div>
+                  <h1 class="text-xl font-bold text-white">Welcome back, ${user.fullname}!</h1>
+                  <p class="text-purple-100 text-sm">Manage your account and access your dashboard</p>
+                </div>
+              </div>
+            </div>
+            <div class="px-6 py-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div class="flex items-center space-x-2">
+                  <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                  </svg>
+                  <div>
+                    <p class="text-gray-500">Firm</p>
+                    <p class="font-semibold text-gray-900">${user.firm_name || 'System Admin'} ${user.firm_code ? `(${user.firm_code})` : ''}</p>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                  </svg>
+                  <div>
+                    <p class="text-gray-500">Role</p>
+                    <p class="font-semibold text-gray-900">${user.role}</p>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                  </svg>
+                  <div>
+                    <p class="text-gray-500">Email</p>
+                    <p class="font-semibold text-gray-900">${user.email}</p>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-4 flex flex-wrap gap-3">
+                ${user.role === 'super_admin' ? `
+                <a href="/admin" data-navigo class="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg shadow hover:bg-purple-700 transition duration-150">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  </svg>
+                  Admin Panel
+                </a>
+                ` : ''}
+                <button id="auth-logout-btn" class="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg shadow hover:bg-red-700 transition duration-150">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                  </svg>
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Content Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- Settings Card -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+              <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                <div class="flex items-center space-x-2">
+                  <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  </svg>
+                  <h2 class="text-lg font-semibold text-gray-900">Settings</h2>
+                </div>
+              </div>
+              <div class="p-6">
+                <!-- Settings Tabs -->
+                <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
+                  <button class="settings-tab flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white rounded-md shadow-sm transition duration-150" data-tab="global">
+                    Global Settings
+                  </button>
+                  <button class="settings-tab flex-1 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition duration-150" data-tab="gst">
+                    GST Config
+                  </button>
+                </div>
+
+                <!-- Global Settings Tab -->
+                <div id="global-tab" class="settings-tab-content">
+                  <div id="global-settings-list" class="space-y-4">
+                    <div class="flex justify-center py-8">
+                      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    </div>
+                  </div>
+                  <button id="add-global-setting-btn" class="mt-4 w-full inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg shadow hover:bg-indigo-700 transition duration-150">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Add New Setting
+                  </button>
+                </div>
+
+                <!-- GST Configuration Tab -->
+                <div id="gst-tab" class="settings-tab-content hidden">
+                  <div class="space-y-4">
+                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div class="flex items-center space-x-3">
+                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                        </svg>
+                        <div>
+                          <h3 class="font-medium text-gray-900">Enable GST Calculation</h3>
+                          <p class="text-sm text-gray-600">Toggle GST calculation for invoices</p>
+                        </div>
+                      </div>
+                      <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="gst-toggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+                    <div id="gst-status" class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
+                      Loading GST status...
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- User Management Card -->
+            ${user.role === 'admin' || user.role === 'manager' || user.role === 'super_admin' ? `
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+              <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                <div class="flex items-center space-x-2">
+                  <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+                  </svg>
+                  <h2 class="text-lg font-semibold text-gray-900">
+                    ${user.role === 'super_admin' ? 'All Users' : 'Firm Users'}
+                  </h2>
+                </div>
+              </div>
+              <div class="p-6">
+                <div id="users-list" class="text-gray-700">
+                  <div class="animate-pulse space-y-4">
+                    <div class="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div class="h-4 bg-gray-200 rounded w-1/2"></div>
+                    <div class="h-4 bg-gray-200 rounded w-5/6"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            ` : ''}
+            
+          </div>
+
+          <!-- Super Admin Info -->
           ${user.role === 'super_admin' ? `
-          <a href="/admin" data-navigo class="inline-block bg-purple-600 text-white px-6 py-3 rounded shadow hover:bg-purple-700 transition mb-3 mr-2">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="inline-block w-5 h-5 mr-2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-            </svg>
-            Go to Admin Panel
-          </a>
+          <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-6 shadow-sm">
+            <div class="flex items-start">
+              <svg class="w-5 h-5 text-blue-500 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <div>
+                <h3 class="font-semibold text-blue-800 mb-1">Super Admin Features</h3>
+                <p class="text-sm text-blue-700 mb-2">Click the "Admin Panel" button above or the gear icon in the sidebar to access:</p>
+                <ul class="text-sm text-blue-700 ml-4 list-disc space-y-1">
+                  <li>Create new firms and firm admins</li>
+                  <li>Manage all firms (approve/reject)</li>
+                  <li>Approve or reject pending user registrations</li>
+                </ul>
+              </div>
+            </div>
+          </div>
           ` : ''}
           
-          <button id="auth-logout-btn" class="bg-red-500 text-white px-4 py-2 rounded shadow hover:bg-red-600 transition">
-            Logout
-          </button>
         </div>
-
-        <!-- Settings Section -->
-        <div class="w-full max-w-2xl p-6 bg-white rounded-xl shadow-lg">
-          <h3 class="text-xl font-semibold text-purple-700 mb-4">Settings</h3>
-          
-          <!-- Settings Tabs -->
-          <div class="flex gap-4 mb-6 border-b border-gray-200">
-            <button class="settings-tab px-4 py-2 font-semibold text-indigo-600 border-b-2 border-indigo-600" data-tab="global">
-              Global Settings
-            </button>
-            <button class="settings-tab px-4 py-2 font-semibold text-gray-600 hover:text-indigo-600" data-tab="gst">
-              GST Configuration
-            </button>
-          </div>
-
-          <!-- Global Settings Tab -->
-          <div id="global-tab" class="settings-tab-content">
-            <div id="global-settings-list" class="space-y-4">
-              <div class="flex justify-center">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-              </div>
-            </div>
-            <button id="add-global-setting-btn" class="mt-6 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
-              + Add New Setting
-            </button>
-          </div>
-
-          <!-- GST Configuration Tab -->
-          <div id="gst-tab" class="settings-tab-content hidden">
-            <div class="space-y-4">
-              <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <h3 class="font-semibold text-gray-800">Enable GST Calculation</h3>
-                  <p class="text-sm text-gray-600">Toggle GST calculation for invoices</p>
-                </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" id="gst-toggle" class="sr-only peer">
-                  <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
-              </div>
-              <div id="gst-status" class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-800">
-                Loading GST status...
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        ${user.role === 'super_admin' ? `
-        <div class="w-full max-w-2xl p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg shadow">
-          <div class="flex items-start">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-blue-500 mr-3 flex-shrink-0">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-            </svg>
-            <div>
-              <h4 class="font-semibold text-blue-800 mb-1">Super Admin Features</h4>
-              <p class="text-sm text-blue-700">Click the "Go to Admin Panel" button above or the gear icon in the sidebar to access:</p>
-              <ul class="text-sm text-blue-700 mt-2 ml-4 list-disc">
-                <li>Create new firms and firm admins</li>
-                <li>Manage all firms (approve/reject)</li>
-                <li>Approve or reject pending user registrations</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        ` : ''}
-        
-        ${user.role === 'admin' || user.role === 'manager' || user.role === 'super_admin' ? `
-        <div id="firm-users" class="w-full max-w-2xl p-6 bg-white rounded-xl shadow-lg text-left">
-          <h3 class="text-lg font-semibold text-purple-700 mb-2">
-            ${user.role === 'super_admin' ? 'All Users' : 'Firm Users'}:
-          </h3>
-          <div id="users-list" class="text-gray-700"></div>
-        </div>
-        ` : ''}
       </div>
 
       <!-- Edit Setting Modal -->
       <div id="edit-setting-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-lg p-6 w-96">
-          <h2 class="text-xl font-bold mb-4 text-gray-800">Edit Setting</h2>
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+          <h2 class="text-xl font-bold mb-4 text-gray-900">Edit Setting</h2>
           <form id="edit-setting-form" class="space-y-4">
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Setting Key</label>
-              <input type="text" id="setting-key" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100" readonly>
+              <input type="text" id="setting-key" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" readonly>
             </div>
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Setting Value</label>
-              <textarea id="setting-value" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600" rows="4"></textarea>
+              <textarea id="setting-value" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" rows="4"></textarea>
             </div>
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-              <textarea id="setting-description" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600" rows="2"></textarea>
+              <textarea id="setting-description" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" rows="2"></textarea>
             </div>
             <div class="flex gap-3 justify-end">
               <button type="button" id="cancel-edit-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition">
@@ -138,20 +223,20 @@ export function AuthPage(onAuthSuccess) {
 
       <!-- Add Setting Modal -->
       <div id="add-setting-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-lg p-6 w-96">
-          <h2 class="text-xl font-bold mb-4 text-gray-800">Add New Setting</h2>
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+          <h2 class="text-xl font-bold mb-4 text-gray-900">Add New Setting</h2>
           <form id="add-setting-form" class="space-y-4">
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Setting Key</label>
-              <input type="text" id="new-setting-key" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600" placeholder="e.g., app_name">
+              <input type="text" id="new-setting-key" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g., app_name">
             </div>
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Setting Value</label>
-              <textarea id="new-setting-value" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600" rows="4" placeholder="Enter the setting value"></textarea>
+              <textarea id="new-setting-value" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" rows="4" placeholder="Enter the setting value"></textarea>
             </div>
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-              <textarea id="new-setting-description" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600" rows="2" placeholder="Optional description"></textarea>
+              <textarea id="new-setting-description" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" rows="2" placeholder="Optional description"></textarea>
             </div>
             <div class="flex gap-3 justify-end">
               <button type="button" id="cancel-add-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition">
@@ -237,21 +322,14 @@ export function AuthPage(onAuthSuccess) {
       if (logoutBtn) {
         logoutBtn.addEventListener("click", async () => {
           try {
-            const refreshToken = localStorage.getItem("refreshToken");
-            await fetch("/auth/auth/logout", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ refreshToken })
+            await fetch("/auth/logout", {
+              method: "POST"
             });
           } catch (err) {
             console.error("Logout error:", err);
           }
           
-          localStorage.removeItem("currentUser");
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("refreshToken");
           window.location.reload();
-          clearAccessTokenTimer();
         });
       }
 
@@ -259,7 +337,7 @@ export function AuthPage(onAuthSuccess) {
       async function fetchUsers() {
         try {
           // Only super_admin can see all users, regular admin/manager see their firm only
-          const endpoint = user.role === 'super_admin' ? '/auth/users' : '/auth/users/firm';
+          const endpoint = user.role === 'super_admin' ? '/auth/auth/users' : '/auth/auth/users/firm';
           const res = await fetch(endpoint);
           
           if (!res.ok) throw new Error("Failed to fetch users");
@@ -390,9 +468,6 @@ export function AuthPage(onAuthSuccess) {
           const data = await res.json();
           
           if (data.success) {
-            localStorage.setItem("accessToken", data.accessToken);
-            localStorage.setItem("refreshToken", data.refreshToken);
-            localStorage.setItem("currentUser", JSON.stringify(data.user));
             onAuthSuccess(data.user);
           } else {
             msg.textContent = data.error;

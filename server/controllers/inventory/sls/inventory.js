@@ -371,12 +371,18 @@ export const deleteStock = (req, res) => {
             return res.status(403).json({ error: 'User is not associated with any firm' });
         }
         
-        const result = Stock.delete.run(id, req.user.firm_id);
+        // First, check if the stock exists and belongs to the user's firm
+        const existingStock = Stock.getById.get(id, req.user.firm_id);
         
-        if (result.changes === 0) {
+        if (!existingStock) {
             return res.status(404).json({ error: 'Stock not found or does not belong to your firm' });
         }
         
+        // Perform the deletion
+        const result = Stock.delete.run(id, req.user.firm_id);
+        
+        // For Turso compatibility, we rely on the existence check above
+        // rather than result.changes which may not be reliable in Turso
         res.json({ message: 'Stock deleted successfully' });
     } catch (err) {
         res.status(500).json({ error: err.message });

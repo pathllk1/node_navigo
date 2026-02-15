@@ -73,6 +73,117 @@ export async function fetchNextBillNumber(state) {
     }
 }
 
+export async function loadExistingBillData(state, billId) {
+    try {
+        console.log('[LOAD_BILL_DATA] Loading bill data for ID:', billId);
+        
+        const response = await fetch(`/api/inventory/sales/bills/${billId}`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        console.log('[LOAD_BILL_DATA] API response status:', response.status);
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('[LOAD_BILL_DATA] API error:', errorData);
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const billData = await response.json();
+        console.log('[LOAD_BILL_DATA] Received bill data:', billData);
+        console.log('[LOAD_BILL_DATA] Items count:', billData.items?.length || 0);
+        console.log('[LOAD_BILL_DATA] Party ID:', billData.party_id);
+        
+        // Populate state with existing bill data
+        state.meta = {
+            billNo: billData.bno,
+            billDate: billData.bdate,
+            billType: billData.btype ? billData.btype.toLowerCase() : 'intra-state',
+            reverseCharge: Boolean(billData.reverse_charge),
+            referenceNo: billData.order_no || '',
+            vehicleNo: billData.vehicle_no || '',
+            dispatchThrough: billData.dispatch_through || '',
+            narration: billData.narration || ''
+        };
+        
+        console.log('[LOAD_BILL_DATA] Populated meta:', state.meta);
+        
+        // Set party information
+        if (billData.party_id) {
+            state.selectedParty = {
+                id: billData.party_id,
+                firm: billData.supply || '',
+                gstin: billData.gstin || '',
+                state: billData.state || '',
+                addr: billData.addr || '',
+                pin: billData.pin || null,
+                state_code: billData.state_code || null
+            };
+            console.log('[LOAD_BILL_DATA] Populated party:', state.selectedParty);
+        } else {
+            console.warn('[LOAD_BILL_DATA] No party information found');
+        }
+        
+        // Set consignee information
+        if (billData.consignee_name || billData.consignee_address) {
+            state.selectedConsignee = {
+                name: billData.consignee_name || '',
+                address: billData.consignee_address || '',
+                gstin: billData.consignee_gstin || '',
+                state: billData.consignee_state || '',
+                pin: billData.consignee_pin || '',
+                contact: '',
+                deliveryInstructions: ''
+            };
+            state.consigneeSameAsBillTo = false;
+            console.log('[LOAD_BILL_DATA] Populated consignee:', state.selectedConsignee);
+        } else {
+            state.consigneeSameAsBillTo = true;
+            console.log('[LOAD_BILL_DATA] Consignee same as bill to');
+        }
+        
+        // Populate cart with existing items
+        state.cart = (billData.items || []).map(item => ({
+            stockId: item.stock_id,
+            item: item.item,
+            narration: item.narration || '',
+            batch: item.batch || null,
+            oem: item.oem || '',
+            hsn: item.hsn,
+            qty: parseFloat(item.qty) || 0,
+            uom: item.uom || 'PCS',
+            rate: parseFloat(item.rate) || 0,
+            grate: parseFloat(item.grate) || 0,
+            disc: parseFloat(item.disc) || 0
+        }));
+        
+        console.log('[LOAD_BILL_DATA] Populated cart with', state.cart.length, 'items');
+        
+        // Populate other charges
+        state.otherCharges = (billData.otherCharges || []).map(charge => ({
+            name: charge.name || charge.type || 'Other Charge',
+            type: charge.type || 'other',
+            hsnSac: charge.hsnSac || '',
+            amount: parseFloat(charge.amount) || 0,
+            gstRate: parseFloat(charge.gstRate) || 0
+        }));
+        
+        console.log('[LOAD_BILL_DATA] Populated other charges:', state.otherCharges.length);
+        
+        // Set history cache to empty for edit mode
+        state.historyCache = {};
+        
+        console.log('[LOAD_BILL_DATA] State populated successfully');
+        return true;
+        
+    } catch (error) {
+        console.error('[LOAD_BILL_DATA] Error loading bill data:', error);
+        throw error;
+    }
+}
+
 export async function fetchData(state) {
     try {
         // Fetch Stocks
@@ -112,24 +223,27 @@ export async function fetchData(state) {
 
         // Don't fetch bill number on page load - it will be generated when bill is saved
         // This prevents incrementing the sequence every time the page is visited
-        state.meta.billNo = 'Will be generated on save';
-        
-        // Fetch preview of next bill number (without incrementing sequence)
-        try {
-            const previewResponse = await fetch('/api/inventory/sales/next-bill-number', {
-                method: 'GET',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' }
-            });
+        // But don't overwrite if already set (e.g., from edit mode)
+        if (!state.meta.billNo || state.meta.billNo === 'Will be generated on save') {
+            state.meta.billNo = 'Will be generated on save';
             
-            if (previewResponse.ok) {
-                const data = await previewResponse.json();
-                if (data.nextBillNumber) {
-                    state.meta.billNo = data.nextBillNumber;
+            // Fetch preview of next bill number (without incrementing sequence)
+            try {
+                const previewResponse = await fetch('/api/inventory/sales/next-bill-number', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (previewResponse.ok) {
+                    const data = await previewResponse.json();
+                    if (data.nextBillNumber) {
+                        state.meta.billNo = data.nextBillNumber;
+                    }
                 }
+            } catch (error) {
+                console.warn("Could not fetch bill number preview:", error.message);
             }
-        } catch (error) {
-            console.warn("Could not fetch bill number preview:", error.message);
         }
         
         // Fetch GST status

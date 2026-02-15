@@ -33,8 +33,8 @@ export function StockPage() {
         </div>
       </div>
 
-      <div id="sub-modal-backdrop" class="fixed inset-0 z-[60] hidden bg-gray-900/50 backdrop-blur-sm flex justify-end items-center transition-opacity p-4">
-          <div id="sub-modal-content" class="w-full max-w-lg bg-white h-auto rounded-2xl shadow-2xl transform transition-transform duration-300 overflow-hidden relative">
+      <div id="sub-modal-backdrop" class="fixed inset-0 z-[60] hidden bg-gray-900/50 backdrop-blur-sm flex justify-center items-center transition-opacity p-4">
+          <div id="sub-modal-content" class="w-full max-w-2xl lg:max-w-4xl bg-white h-auto rounded-2xl shadow-2xl transform transition-transform duration-300 overflow-hidden relative">
           </div>
       </div>
       
@@ -63,9 +63,76 @@ export function StockPage() {
     });
 
     // --- Iframe Communication ---
-    window.addEventListener("message", (event) => {
+    window.addEventListener("message", async (event) => {
       if (event.data === "IFRAME_READY") {
         fetchStocks();
+      } else if (event.data.type === "UPDATE_STOCK") {
+        // Handle stock update request from iframe
+        const { id, data } = event.data;
+        
+        try {
+          const response = await fetch(`/api/inventory/sales/stocks/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(data)
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok) {
+            // Notify iframe of successful update
+            iframe.contentWindow.postMessage({ type: 'UPDATE_SUCCESS', id }, '*');
+            
+            // Refresh the grid with updated data
+            fetchStocks();
+          } else {
+            // Notify iframe of error
+            iframe.contentWindow.postMessage({ 
+              type: 'UPDATE_ERROR', 
+              message: result.error || 'Failed to update stock' 
+            }, '*');
+          }
+        } catch (error) {
+          // Notify iframe of error
+          iframe.contentWindow.postMessage({ 
+            type: 'UPDATE_ERROR', 
+            message: error.message 
+          }, '*');
+        }
+      } else if (event.data.type === "DELETE_STOCK") {
+        // Handle stock delete request from iframe
+        const { id } = event.data;
+        
+        try {
+          const response = await fetch(`/api/inventory/sales/stocks/${id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok) {
+            // Notify iframe of successful deletion
+            iframe.contentWindow.postMessage({ type: 'DELETE_SUCCESS', id }, '*');
+            
+            // Refresh the grid with updated data
+            fetchStocks();
+          } else {
+            // Notify iframe of error
+            iframe.contentWindow.postMessage({ 
+              type: 'DELETE_ERROR', 
+              message: result.error || 'Failed to delete stock' 
+            }, '*');
+          }
+        } catch (error) {
+          // Notify iframe of error
+          iframe.contentWindow.postMessage({ 
+            type: 'DELETE_ERROR', 
+            message: error.message 
+          }, '*');
+        }
       }
     });
 
@@ -80,8 +147,10 @@ export function StockPage() {
 <head>
 <meta charset="UTF-8" />
 <title>Stock Grid</title>
-<script src="https://cdn.tailwindcss.com"><\/script>
-<script src="/cdns/ag-grid-enterprise.min.js"><\/script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/cdns/ag-grid-enterprise.min.js"></script>
+<link rel="stylesheet" href="/cdns/toastify.css">
+<script src="/cdns/toastify.js"></script>
 <style>
   html, body { margin:0; padding:0; height:100%; font-family: sans-serif; }
   #myGrid { width:100%; height:100%; }
@@ -126,17 +195,17 @@ export function StockPage() {
             <form id="viewForm">
                 
                 <div class="mb-6">
-                    <h4 class="text-sm uppercase tracking-wide text-gray-500 font-bold mb-3 border-b pb-1">Item Information</h4>
+                    <h4 class="text-sm uppercase tracking-wide text-indigo-600 font-bold mb-3 border-b pb-1 border-indigo-100">Item Information</h4>
                     
                     <div class="grid grid-cols-2 gap-6">
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
-                                <input type="text" id="modal_item" readonly class="w-full rounded-lg border-gray-200 border px-3 py-2 bg-gray-50 text-gray-600 text-sm focus:ring-0">
+                                <input type="text" id="modal_item" class="w-full rounded-lg border-gray-300 border px-3 py-2 text-gray-900 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">OEM / Manufacturer</label>
-                                <input type="text" id="modal_oem" readonly class="w-full rounded-lg border-gray-200 border px-3 py-2 bg-gray-50 text-gray-600 text-sm focus:ring-0">
+                                <input type="text" id="modal_oem" class="w-full rounded-lg border-gray-300 border px-3 py-2 text-gray-900 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm">
                             </div>
                         </div>
 
@@ -144,25 +213,25 @@ export function StockPage() {
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">HSN Code</label>
-                                    <input type="text" id="modal_hsn" readonly class="w-full rounded-lg border-gray-200 border px-3 py-2 bg-gray-50 text-gray-600 text-sm focus:ring-0">
+                                    <input type="text" id="modal_hsn" class="w-full rounded-lg border-gray-300 border px-3 py-2 text-gray-900 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">UOM</label>
-                                    <input type="text" id="modal_uom" readonly class="w-full rounded-lg border-gray-200 border px-3 py-2 bg-gray-50 text-gray-600 text-sm focus:ring-0">
+                                    <input type="text" id="modal_uom" class="w-full rounded-lg border-gray-300 border px-3 py-2 text-gray-900 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm">
                                 </div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">GST Rate (%)</label>
-                                <input type="number" id="modal_grate" readonly class="w-full rounded-lg border-gray-200 border px-3 py-2 bg-gray-50 text-gray-600 text-sm focus:ring-0">
+                                <input type="number" id="modal_grate" class="w-full rounded-lg border-gray-300 border px-3 py-2 text-gray-900 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm">
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div>
-                    <div class="flex justify-between items-end mb-2 border-b pb-1">
-                        <h4 class="text-sm uppercase tracking-wide text-gray-500 font-bold">Batch Inventory</h4>
-                        <span class="text-xs text-gray-400">Detailed view of all batches</span>
+                    <div class="flex justify-between items-end mb-2 border-b pb-1 border-indigo-100">
+                        <h4 class="text-sm uppercase tracking-wide text-indigo-600 font-bold">Batch Inventory</h4>
+                        <span class="text-xs text-indigo-500">Detailed view of all batches</span>
                     </div>
                     
                     <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
@@ -183,13 +252,22 @@ export function StockPage() {
                             <div class="col-span-7 text-right" id="modal_grand_total_val">₹0.00</div>
                         </div>
                     </div>
+                    
+                    <div class="mt-4 flex justify-end">
+                        <button type="button" id="add_batch_btn" class="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded border border-gray-300 hover:bg-gray-200 transition shadow-sm">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            Add Batch
+                        </button>
+                    </div>
                 </div>
 
             </form>
         </div>
 
         <div class="bg-gray-50 px-6 py-4 sm:flex sm:flex-row-reverse gap-3">
-          <button type="button" class="mt-3 inline-flex w-full justify-center rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto transition-all" onclick="closeViewModal()">Close</button>
+          <button type="button" id="save_modal_btn" class="mt-3 inline-flex w-full justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:mt-0 sm:w-auto transition-all">Save Changes</button>
+          <button type="button" id="delete_modal_btn" class="mt-3 inline-flex w-full justify-center rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 sm:mt-0 sm:w-auto transition-all">Delete Stock</button>
+          <button type="button" class="mt-3 inline-flex w-full justify-center rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto transition-all" onclick="closeViewModal()">Cancel</button>
         </div>
       </div>
     </div>
@@ -234,7 +312,7 @@ export function StockPage() {
   // --- 2. MODAL LOGIC (View Mode) ---
   window.showModal = function(id) {
      if(!window.currentGridApi) return;
-     
+       
      // Find the row data
      let selectedData = null;
      window.currentGridApi.forEachNode(node => {
@@ -242,59 +320,139 @@ export function StockPage() {
              selectedData = node.data;
          }
      });
-
+  
      if (selectedData) {
+         // Store the original data for comparison
+         window.currentModalData = {...selectedData};
+           
          // Populate Global Fields
          document.getElementById('modal_item').value = selectedData.item || '';
          document.getElementById('modal_oem').value = selectedData.oem || '';
          document.getElementById('modal_hsn').value = selectedData.hsn || '';
          document.getElementById('modal_uom').value = selectedData.uom || '';
          document.getElementById('modal_grate').value = selectedData.grate || 0;
-         
+           
          document.getElementById('modal_total_qty').textContent = selectedData.qty || 0;
          document.getElementById('modal_grand_total_val').textContent = '₹' + (selectedData.total ? selectedData.total.toFixed(2) : '0.00');
-
+  
          // Populate Batch Rows
          const container = document.getElementById('modal_batches_container');
          container.innerHTML = ''; // Clear previous
-
+  
          let batches = [];
          try {
              const raw = selectedData.batches;
              batches = typeof raw === 'string' ? JSON.parse(raw) : (raw || []);
          } catch(e) { batches = []; }
-
+  
          if (batches.length === 0) {
              container.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm italic">No batches found for this item.</div>';
          } else {
-             batches.forEach(b => {
+             batches.forEach((b, index) => {
                  // Date Formatting
                  let exp = '';
                  if(b.expiry) {
                      try { exp = new Date(b.expiry).toISOString().split('T')[0]; } catch(e){}
                  }
-                 
-                 const rowHtml = \`
-                    <div class="grid grid-cols-12 gap-2 px-4 py-2 border-b border-gray-100 items-center hover:bg-gray-50 transition text-gray-700">
-                        <div class="col-span-3 truncate" title="\${b.batch || '-'}">\${b.batch || '<span class="italic text-gray-400">No Batch</span>'}</div>
-                        <div class="col-span-2 text-right font-mono">\${b.qty || 0}</div>
-                        <div class="col-span-2 text-right font-mono">\${b.rate || 0}</div>
-                        <div class="col-span-2 text-right font-mono">\${b.mrp || 0}</div>
-                        <div class="col-span-3 pl-2 text-xs text-gray-500">\${exp || '-'}</div>
-                    </div>
-                 \`;
+                   
+                 const rowHtml = '<div class="grid grid-cols-12 gap-2 px-4 py-2 border-b border-gray-100 items-center hover:bg-gray-50 transition text-gray-700 batch-row" data-index="' + index + '"><div class="col-span-3"><input type="text" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="' + (b.batch || '') + '" placeholder="Batch No"></div><div class="col-span-2"><input type="number" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="' + (b.qty || 0) + '" placeholder="Qty"></div><div class="col-span-2"><input type="number" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="' + (b.rate || 0) + '" step="0.01" placeholder="Rate"></div><div class="col-span-2"><input type="number" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="' + (b.mrp || 0) + '" step="0.01" placeholder="MRP"></div><div class="col-span-3 pl-2"><input type="date" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="' + exp + '" placeholder="Expiry"><button type="button" class="remove-batch-btn text-red-500 text-xs ml-2" title="Remove Batch">✕</button></div></div>';
                  container.insertAdjacentHTML('beforeend', rowHtml);
              });
          }
-         
+           
          // Show Modal
          document.getElementById('viewModal').classList.remove('hidden');
      }
   };
-
+  
   window.closeViewModal = function() {
       document.getElementById('viewModal').classList.add('hidden');
   };
+    
+  // Add batch functionality
+  document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('add_batch_btn')?.addEventListener('click', function() {
+          const container = document.getElementById('modal_batches_container');
+          const batchCount = container.querySelectorAll('.batch-row').length;
+            
+          const newRowHtml = '<div class="grid grid-cols-12 gap-2 px-4 py-2 border-b border-gray-100 items-center hover:bg-gray-50 transition text-gray-700 batch-row" data-index="' + batchCount + '"><div class="col-span-3"><input type="text" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="" placeholder="Batch No"></div><div class="col-span-2"><input type="number" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="0" placeholder="Qty"></div><div class="col-span-2"><input type="number" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="0" step="0.01" placeholder="Rate"></div><div class="col-span-2"><input type="number" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="0" step="0.01" placeholder="MRP"></div><div class="col-span-3 pl-2"><input type="date" class="w-full rounded border-gray-300 border px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition shadow-sm" value="" placeholder="Expiry"><button type="button" class="remove-batch-btn text-red-500 text-xs ml-2" title="Remove Batch">✕</button></div></div>';
+            
+          container.insertAdjacentHTML('beforeend', newRowHtml);
+      });
+        
+      // Event delegation for removing batches
+      document.getElementById('modal_batches_container')?.addEventListener('click', function(e) {
+          if (e.target.classList.contains('remove-batch-btn')) {
+              e.target.closest('.batch-row').remove();
+          }
+      });
+        
+      // Save button functionality
+      document.getElementById('save_modal_btn')?.addEventListener('click', function() {
+          // Disable the save button to prevent duplicate submissions
+          this.disabled = true;
+                
+          // Collect updated data
+          const updatedData = {
+              id: window.currentModalData.id,
+              item: document.getElementById('modal_item').value,
+              oem: document.getElementById('modal_oem').value,
+              hsn: document.getElementById('modal_hsn').value,
+              uom: document.getElementById('modal_uom').value,
+              grate: parseFloat(document.getElementById('modal_grate').value) || 0,
+              batches: []
+          };
+                
+          // Collect batch data
+          const batchRows = document.querySelectorAll('.batch-row');
+          batchRows.forEach(row => {
+              const inputs = row.querySelectorAll('input');
+              const batchData = {
+                  batch: inputs[0].value || null,
+                  qty: parseFloat(inputs[1].value) || 0,
+                  rate: parseFloat(inputs[2].value) || 0,
+                  mrp: parseFloat(inputs[3].value) || 0,
+                  expiry: inputs[4].value || null
+              };
+              updatedData.batches.push(batchData);
+          });
+                
+          // Validate required fields
+          if (!updatedData.item.trim()) {
+              alert('Item name is required');
+              // Re-enable the save button
+              this.disabled = false;
+              return;
+          }
+                
+          // Send update request to parent
+          window.parent.postMessage({
+              type: 'UPDATE_STOCK',
+              id: updatedData.id,
+              data: updatedData
+          }, '*');
+                
+          // Close the modal
+          closeViewModal();
+      });
+            
+      // Delete button functionality
+      document.getElementById('delete_modal_btn')?.addEventListener('click', function() {
+          // Confirm deletion with user
+          if (!confirm('Are you sure you want to delete this stock item? This action cannot be undone.')) {
+              return;
+          }
+                
+          // Send delete request to parent
+          window.parent.postMessage({
+              type: 'DELETE_STOCK',
+              id: window.currentModalData.id
+          }, '*');
+                
+          // Close the modal
+          closeViewModal();
+      });
+  });
 
   function numberFormatter(params) {
     if (params.value === null || params.value === undefined) return '';
@@ -465,6 +623,41 @@ export function StockPage() {
 
   });
 
+  // Toast notification functions
+  function showToast(message, type = 'info') {
+    const backgroundColor = {
+      success: 'linear-gradient(to right, #00b09b, #96c93d)',
+      error: 'linear-gradient(to right, #ff416c, #ff4b2b)',
+      warning: 'linear-gradient(to right, #ffb347, #ffcc33)',
+      info: 'linear-gradient(to right, #4facfe, #00f2fe)'
+    }[type] || 'linear-gradient(to right, #4facfe, #00f2fe)';
+    
+    Toastify({
+      text: message,
+      duration: 3000,
+      close: true,
+      gravity: "top",
+      position: "right",
+      backgroundColor: backgroundColor,
+      stopOnFocus: true,
+    }).showToast();
+  }
+
+  // Listen for responses from parent page
+  window.addEventListener('message', function(event) {
+    if (event.data.type === 'UPDATE_SUCCESS') {
+      showToast('Stock updated successfully!', 'success');
+    } else if (event.data.type === 'UPDATE_ERROR') {
+      showToast('Error updating stock: ' + (event.data.message || 'Unknown error'), 'error');
+      // Re-enable save button
+      document.getElementById('save_modal_btn')?.removeAttribute('disabled');
+    } else if (event.data.type === 'DELETE_SUCCESS') {
+      showToast('Stock deleted successfully!', 'success');
+    } else if (event.data.type === 'DELETE_ERROR') {
+      showToast('Error deleting stock: ' + (event.data.message || 'Unknown error'), 'error');
+    }
+  });
+  
   // Signal parent that we are ready to receive data
   window.parent.postMessage("IFRAME_READY", "*");
 

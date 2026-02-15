@@ -3,7 +3,7 @@
  * Coordinates all components and manages the application lifecycle
  */
 
-import { createInitialState, fetchCurrentUserFirmName, fetchData } from './stateManager.js';
+import { createInitialState, fetchCurrentUserFirmName, fetchData, loadExistingBillData } from './stateManager.js';
 import { formatCurrency, populateConsigneeFromBillTo } from './utils.js';
 import { addOtherCharge, removeOtherCharge, updateOtherCharge } from './otherChargesManager.js';
 import { addItemToCart, removeItemFromCart, updateCartItem, clearCart } from './cartManager.js';
@@ -23,37 +23,113 @@ export function initSalesSystem() {
     const container = document.getElementById('sales-system');
     if (!container) return;
 
+    // Check for edit mode
+    console.log('SLS: Current URL:', window.location.href);
+    console.log('SLS: window.location.search:', window.location.search);
+    const urlParams = new URLSearchParams(window.location.search);
+    const editBillIdParam = urlParams.get('edit');
+    console.log('SLS: editBillIdParam from URL:', editBillIdParam);
+    
+    // Also check sessionStorage as fallback for SPA routing timing issues
+    const sessionEditId = sessionStorage.getItem('editBillId');
+    console.log('SLS: editBillId from sessionStorage:', sessionEditId);
+    
+    // Use URL param if available, otherwise sessionStorage
+    const finalEditParam = editBillIdParam || sessionEditId;
+    console.log('SLS: final edit param:', finalEditParam);
+    
+    // Validate edit bill ID
+    let editBillId = null;
+    let isEditMode = false;
+    
+    if (finalEditParam) {
+        const parsedId = parseInt(finalEditParam, 10);
+        console.log('SLS: parsedId:', parsedId, 'isNaN:', isNaN(parsedId), 'parsedId > 0:', parsedId > 0);
+        if (!isNaN(parsedId) && parsedId > 0) {
+            editBillId = parsedId;
+            isEditMode = true;
+            // Clear sessionStorage after use (moved to after loading)
+            // sessionStorage.removeItem('editBillId');
+        } else {
+            // Invalid bill ID - redirect to create mode
+            console.warn('Invalid edit bill ID:', finalEditParam);
+            sessionStorage.removeItem('editBillId');
+            window.location.href = '/inventory/sls';
+            return;
+        }
+    }
+
+    console.log('SLS: Edit mode detected:', isEditMode, 'Bill ID:', editBillId);
+
     const state = createInitialState();
     
     // Initialize
     fetchCurrentUserFirmName(state);
     
     // Load data and render
-    fetchData(state).then(() => {
-        renderMainLayout();
-    }).catch(err => {
-        console.error("Failed to load data:", err);
-        container.innerHTML = `<div class="p-8 text-center text-red-600 border border-red-200 bg-red-50 rounded">
-            <h3 class="font-bold text-lg">System Error</h3>
-            <p>${err.message}</p>
-            <button class="reload-system-btn mt-4 px-4 py-2 bg-red-600 text-white rounded shadow">Reload System</button>
-        </div>`;
-        
-        const reloadBtn = container.querySelector('.reload-system-btn');
-        if (reloadBtn) {
-            reloadBtn.addEventListener('click', () => location.reload());
-        }
-    });
+    if (isEditMode) {
+        // Edit mode: Load existing bill data
+        loadExistingBillData(state, editBillId).then(() => {
+            // Clear sessionStorage after successful loading to prevent persistence
+            sessionStorage.removeItem('editBillId');
+            
+            // Load additional data (stocks, parties) for editing
+            fetchData(state).then(() => {
+                renderMainLayout(isEditMode);
+            }).catch(err => {
+                console.error("Failed to load data for edit mode:", err);
+                showEditError(container, err.message, editBillId);
+            });
+        }).catch(err => {
+            console.error("Failed to load bill data:", err);
+            // Clear sessionStorage on error to prevent stale data
+            sessionStorage.removeItem('editBillId');
+            showEditError(container, err.message, editBillId);
+        });
+    } else {
+        // Create mode: Load fresh data
+        fetchData(state).then(() => {
+            renderMainLayout(isEditMode);
+        }).catch(err => {
+            console.error("Failed to load data:", err);
+            container.innerHTML = `<div class="p-8 text-center text-red-600 border border-red-200 bg-red-50 rounded">
+                <h3 class="font-bold text-lg">System Error</h3>
+                <p>${err.message}</p>
+                <button class="reload-system-btn mt-4 px-4 py-2 bg-red-600 text-white rounded shadow">Reload System</button>
+            </div>`;
+            
+            const reloadBtn = container.querySelector('.reload-system-btn');
+            if (reloadBtn) {
+                reloadBtn.addEventListener('click', () => location.reload());
+            }
+        });
+    }
 
-    function renderMainLayout() {
+    function showEditError(container, errorMessage, billId) {
+        container.innerHTML = `<div class="p-8 text-center text-red-600 border border-red-200 bg-red-50 rounded">
+            <h3 class="font-bold text-lg">Edit Bill Error</h3>
+            <p class="mb-4">Unable to load bill ${billId} for editing:</p>
+            <p class="mb-6 font-mono text-sm">${errorMessage}</p>
+            <div class="flex gap-3 justify-center">
+                <button onclick="window.location.href='/inventory/sls-rpt'" class="px-4 py-2 bg-gray-600 text-white rounded shadow hover:bg-gray-700 transition">Back to Sales Report</button>
+                <button onclick="window.location.href='/inventory/sls'" class="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition">Create New Bill</button>
+            </div>
+        </div>`;
+    }
+
+    function renderMainLayout(isEditMode = false) {
         container.innerHTML = `
         <div class="h-[calc(100vh-140px)] flex flex-col bg-gray-50 text-slate-800 font-sans text-sm border border-gray-300 rounded-lg shadow-sm overflow-hidden">
             <!-- Header -->
             <div class="bg-white border-b border-gray-200 p-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm z-20">
                 <div class="flex flex-col sm:flex-row flex-wrap gap-2">
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg font-bold text-gray-800">Sales Invoice</h1>
+                        ${isEditMode ? '<span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full border border-orange-200">EDIT MODE</span>' : ''}
+                    </div>
                     <div class="flex flex-col">
                         <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Bill No</label>
-                        <input type="text" value="${state.meta.billNo}" readonly class="border border-gray-300 rounded px-2 py-1 text-xs font-bold w-32 bg-gray-100 text-slate-500 cursor-not-allowed" title="Auto-generated when saved">
+                        <input type="text" value="${state.meta.billNo}" readonly class="border border-gray-300 rounded px-2 py-1 text-xs font-bold w-32 bg-gray-100 text-slate-500 cursor-not-allowed" title="${isEditMode ? 'Bill number cannot be changed in edit mode' : 'Auto-generated when saved'}">
                     </div>
                     <div class="flex flex-col">
                         <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Date</label>
@@ -82,7 +158,7 @@ export function initSalesSystem() {
                     <button id="btn-other-charges" class="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors whitespace-nowrap">Other Charges</button>
                     <button id="btn-reset" class="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded hover:bg-red-100 transition-colors whitespace-nowrap">Reset</button>
                     <button id="btn-save" class="px-4 py-1.5 bg-slate-800 text-white text-xs rounded hover:bg-slate-900 shadow font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
-                        <span>💾</span> Save Invoice
+                        <span>💾</span> ${isEditMode ? 'Update Bill' : 'Save Invoice'}
                     </button>
                 </div>
             </div>
@@ -224,14 +300,14 @@ export function initSalesSystem() {
                         onSelectParty: async (party) => {
                             state.selectedParty = party;
                             state.historyCache = {};
-                            renderMainLayout();
+                            renderMainLayout(isEditMode);
                         },
                         onCreateParty: () => {
                             openCreatePartyModal(state, async (newParty) => {
                                 state.parties.push(newParty);
                                 state.selectedParty = newParty;
                                 state.historyCache = {};
-                                renderMainLayout();
+                                renderMainLayout(isEditMode);
                             });
                         }
                     });
@@ -248,10 +324,10 @@ export function initSalesSystem() {
         }
 
         // Attach event listeners
-        attachEventListeners();
+        attachEventListeners(isEditMode, editBillId || null);
     }
 
-    function attachEventListeners() {
+    function attachEventListeners(isEditMode = false, editBillId = null) {
         // Add item button - open stock modal
         const addBtn = document.getElementById('btn-add-item');
         if (addBtn) {
@@ -261,11 +337,11 @@ export function initSalesSystem() {
                         if (showBatchModal) {
                             await showBatchSelectionModal(stock, (stockWithBatch) => {
                                 addItemToCart(state, stockWithBatch);
-                                renderMainLayout();
+                                renderMainLayout(isEditMode);
                             });
                         } else {
                             addItemToCart(state, stock);
-                            renderMainLayout();
+                            renderMainLayout(isEditMode);
                         }
                     },
                     onCreateStock: () => {
@@ -291,11 +367,11 @@ export function initSalesSystem() {
                                     if (showBatchModal) {
                                         await showBatchSelectionModal(stock, (stockWithBatch) => {
                                             addItemToCart(state, stockWithBatch);
-                                            renderMainLayout();
+                                            renderMainLayout(isEditMode);
                                         });
                                     } else {
                                         addItemToCart(state, stock);
-                                        renderMainLayout();
+                                        renderMainLayout(isEditMode);
                                     }
                                 },
                                 onCreateStock: () => {
@@ -315,7 +391,7 @@ export function initSalesSystem() {
                                         } catch (err) {
                                             console.error('Failed to refresh stocks:', err);
                                         }
-                                        renderMainLayout();
+                                        renderMainLayout(isEditMode);
                                     });
                                 },
                                 onViewHistory: (stock) => {
@@ -378,7 +454,7 @@ export function initSalesSystem() {
             resetBtn.onclick = () => {
                 if (confirm("Clear current invoice details?")) {
                     clearCart(state);
-                    renderMainLayout();
+                    renderMainLayout(isEditMode);
                 }
             };
         }
@@ -398,6 +474,22 @@ export function initSalesSystem() {
                 }
                 
                 try {
+                    // Show confirmation dialog for edit mode
+                    if (isEditMode) {
+                        const confirmed = confirm(
+                            '⚠️ Edit Bill Confirmation\n\n' +
+                            'Editing this bill will:\n' +
+                            '• Update stock quantities (return old quantities, deduct new ones)\n' +
+                            '• Recalculate GST and totals\n' +
+                            '• Update accounting ledger entries\n\n' +
+                            'This action cannot be undone. Continue?'
+                        );
+                        
+                        if (!confirmed) {
+                            return;
+                        }
+                    }
+
                     const billData = {
                         meta: state.meta,
                         party: state.selectedParty,
@@ -406,8 +498,13 @@ export function initSalesSystem() {
                         consignee: state.selectedConsignee
                     };
                     
-                    const response = await fetch('/api/inventory/sales/bills', {
-                        method: 'POST',
+                    const method = isEditMode ? 'PUT' : 'POST';
+                    const url = isEditMode 
+                        ? `/api/inventory/sales/bills/${editBillId}`
+                        : '/api/inventory/sales/bills';
+                    
+                    const response = await fetch(url, {
+                        method: method,
                         credentials: 'include',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(billData)
@@ -419,20 +516,35 @@ export function initSalesSystem() {
                     }
                     
                     const result = await response.json();
-                    console.log('Bill creation response:', result);
-                    showToast(`Invoice saved successfully! Bill No: ${result.billNo}`, 'success');
+                    console.log('Bill operation response:', result);
                     
-                    // Export to PDF with the bill ID
-                    console.log('Calling exportInvoiceToPDF with billId:', result.id);
-                    exportInvoiceToPDF(state, formatCurrency, result.id);
+                    const successMessage = isEditMode 
+                        ? `Bill updated successfully! Bill No: ${result.billNo || state.meta.billNo}`
+                        : `Invoice saved successfully! Bill No: ${result.billNo}`;
                     
-                    // Reset form
-                    clearCart(state);
-                    await fetchData(state);
-                    renderMainLayout();
+                    showToast(successMessage, 'success');
+                    
+                    if (isEditMode) {
+                        // For edit mode, redirect back to sales report after short delay
+                        setTimeout(() => {
+                            window.router.navigate('inventory/sls/rpt');
+                        }, 1500);
+                    } else {
+                        // For create mode, export PDF and reset form
+                        console.log('Calling exportInvoiceToPDF with billId:', result.id);
+                        exportInvoiceToPDF(state, formatCurrency, result.id);
+                        
+                        // Reset form
+                        clearCart(state);
+                        await fetchData(state);
+                        renderMainLayout(isEditMode);
+                    }
                 } catch (err) {
-                    console.error('Error saving invoice:', err);
-                    showToast('Error saving invoice: ' + err.message, 'error');
+                    console.error('Error saving/updating bill:', err);
+                    const errorMessage = isEditMode 
+                        ? 'Error updating bill: ' + err.message
+                        : 'Error saving invoice: ' + err.message;
+                    showToast(errorMessage, 'error');
                 }
             };
         }
@@ -466,7 +578,7 @@ export function initSalesSystem() {
             btn.onclick = (e) => {
                 const idx = parseInt(e.target.dataset.idx);
                 removeItemFromCart(state, idx);
-                renderMainLayout();
+                renderMainLayout(isEditMode);
             };
         });
 
@@ -498,7 +610,7 @@ export function initSalesSystem() {
                 if (e.target.checked) {
                     populateConsigneeFromBillTo(state);
                 }
-                renderMainLayout();
+                renderMainLayout(isEditMode);
             };
         }
 

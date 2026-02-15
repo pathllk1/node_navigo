@@ -1752,7 +1752,7 @@ export function initSalesSystem() {
             }
 
             try {
-                const res = await fetch(`/inventory/api/stocks/${stock.id}`, {
+                const res = await fetch(`/api/inventory/sales/stocks/${stock.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',

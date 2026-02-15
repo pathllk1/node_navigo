@@ -17,8 +17,7 @@ import { StcMovementPage } from "./pages/inventory/sts-mov.js";
 
 
 import { Layout } from "./layout.js";
-import "./api.js";
-import { startAccessTokenTimer } from "./api.js";
+import { clearAccessTokenTimer, startAccessTokenTimer } from "./api.js";
 import { initSidebar } from "./sidebar.js";
 
 const root = document.getElementById("app");
@@ -28,16 +27,123 @@ const router = new Navigo("/", { hash: false });
 window.router = router;
 
 let currentUser = null;
+let pollingInterval;
+let lastExpiresAt = null;
 
-// Load user from localStorage
-const savedUser = localStorage.getItem("currentUser");
-if (savedUser) currentUser = JSON.parse(savedUser);
+function startPolling() {
+  console.log('startPolling called');
+  if (pollingInterval) clearInterval(pollingInterval);
+  
+  // Fetch immediately
+  (async () => {
+    console.log('Fetching /auth/auth/session immediately');
+    try {
+      const res = await fetch('/auth/auth/session');
+      console.log('Immediate fetch result:', res.status, res.ok);
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Session data:', data);
+        // Only restart the timer if the expiration time has changed
+        // This prevents unnecessary timer restarts during active sessions
+        console.log('Comparing expiration times:', {
+          current: data.expiresAt,
+          last: lastExpiresAt,
+          areEqual: data.expiresAt === lastExpiresAt,
+          currentTime: new Date().toISOString()
+        });
+        
+        if (data.expiresAt !== lastExpiresAt) {
+          console.log('Expiration time changed, restarting timer');
+          lastExpiresAt = data.expiresAt;
+          startAccessTokenTimer(data.expiresAt);
+        } else {
+          console.log('Expiration time unchanged, keeping current timer');
+        }
+      } else {
+        console.log('Fetch failed, clearing timer');
+        // Only clear the timer if we're still logged in
+        if (currentUser) {
+          clearAccessTokenTimer();
+        }
+      }
+    } catch (err) {
+      console.log('Fetch error:', err);
+      // Only clear the timer if we're still logged in
+      if (currentUser) {
+        clearAccessTokenTimer();
+      }
+    }
+  })();
+  
+  // Then poll every 3 min
+  pollingInterval = setInterval(async () => {
+    console.log('Polling fetch');
+    try {
+      const res = await fetch('/auth/auth/session');
+      console.log('Polling fetch result:', res.status, res.ok);
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Polling session data:', data);
+        
+        // Only restart the timer if the expiration time has changed
+        // This prevents unnecessary timer restarts during active sessions
+        // and allows the timer to count down to completion
+        console.log('Polling - Comparing expiration times:', {
+          current: data.expiresAt,
+          last: lastExpiresAt,
+          areEqual: data.expiresAt === lastExpiresAt,
+          currentTime: new Date().toISOString()
+        });
+        
+        if (data.expiresAt !== lastExpiresAt) {
+          console.log('Polling - Expiration time changed, restarting timer');
+          lastExpiresAt = data.expiresAt;
+          startAccessTokenTimer(data.expiresAt);
+        } else {
+          console.log('Polling - Expiration time unchanged, keeping current timer');
+        }
+      } else {
+        console.log('Polling fetch failed, clearing timer');
+        // Only clear the timer if we're still logged in
+        // If user logs out, the handleLogout function will properly clear everything
+        if (currentUser) {
+          clearAccessTokenTimer();
+        }
+      }
+    } catch (err) {
+      console.log('Polling fetch error:', err);
+      // Only clear the timer if we're still logged in
+      if (currentUser) {
+        clearAccessTokenTimer();
+      }
+    }
+  }, 180000);
+}
+
+// Load user from server
+async function loadUser() {
+  try {
+    const res = await fetch('/auth/me');
+    if (res.ok) {
+      const data = await res.json();
+      currentUser = data.user;
+      if (currentUser) startPolling();
+      // Re-render if needed
+      if (window.location.pathname !== '/auth') {
+        renderPage(getCurrentPage());
+      }
+    }
+  } catch (err) {
+    // leave currentUser null
+  }
+}
 
 // ---------------- Auth Success ----------------
 function handleAuthSuccess(user) {
   currentUser = user;
+  startPolling();
   // Re-render the auth page to show logged-in state
-  renderPage(AuthPage(handleAuthSuccess));
+  renderPage(AuthPage(handleAuthSuccess, currentUser));
   // Then navigate to home after a brief delay
   setTimeout(() => {
     router.navigate("/");
@@ -47,7 +153,9 @@ function handleAuthSuccess(user) {
 // ---------------- Logout ----------------
 function handleLogout() {
   currentUser = null;
-  localStorage.removeItem("currentUser");
+  clearAccessTokenTimer();
+  if (pollingInterval) clearInterval(pollingInterval);
+  lastExpiresAt = null;
   router.navigate("/auth");
   renderPage(AuthPage(handleAuthSuccess)); // force re-render
 }
@@ -64,18 +172,21 @@ function renderPage(page) {
   root.innerHTML = Layout(page.html, currentUser);
   router.updatePageLinks();
   renderSidebar();
-  startAccessTokenTimer();
   if (page.scripts) page.scripts();
+  // Restart timer if needed
+  if (currentUser && lastExpiresAt) {
+    startAccessTokenTimer(lastExpiresAt);
+  }
 }
 
 // ---------------- SPA Routes ----------------
 router
-  .on("/", () => renderPage(HomePage()))
+  .on("/", () => renderPage({ html: '<h1>Welcome to My SPA</h1><p>This is the home page.</p>', scripts: () => {} }))
   .on("/about", () => renderPage(AboutPage()))
   .on("/contact", () => renderPage(ContactPage()))
   .on("/services", () => renderPage(ServicesPage()))
   .on("/server-info", () => renderPage(ServerInfoPage()))
-  .on("/auth", () => renderPage(AuthPage(handleAuthSuccess)))
+  .on("/auth", () => renderPage(AuthPage(handleAuthSuccess, currentUser)))
   .on("/settings", () => {
     if (currentUser) {
       renderPage(SettingsPage());
@@ -103,3 +214,5 @@ router
     renderPage({ html: "<h1>404 - Page not found</h1>", scripts: () => { } })
   )
   .resolve();
+
+loadUser();

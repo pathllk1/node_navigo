@@ -263,37 +263,11 @@ router.post("/auth/login", async (req, res) => {
     user.last_login = new Date().toISOString();
 
     // Generate access token
-    const accessToken = jwt.sign(
-      { 
-        id: user.id, 
-        username: user.username,
-        email: user.email,
-        fullname: user.fullname,
-        role: user.role,
-        firm_id: user.firm_id,
-        firm_code: user.firm_code
-      },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
+    const accessToken = jwt.sign({ id: user.id, username: user.username, email: user.email, fullname: user.fullname, role: user.role, firm_id: user.firm_id, firm_code: user.firm_code }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
     // Generate refresh token
-    const refreshToken = jwt.sign(
-      { 
-        id: user.id,
-        firm_id: user.firm_id 
-      },
-      JWT_REFRESH_SECRET,
-      { expiresIn: REFRESH_EXPIRES_IN }
-    );
+    const refreshToken = jwt.sign({ id: user.id, firm_id: user.firm_id }, JWT_REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES_IN });
 
-    // Store hashed refresh token
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    
-    saveRefreshToken.run(user.id, hashedRefreshToken, expiresAt);
-
-    // Return user data (without password)
     const userData = {
       id: user.id,
       username: user.username,
@@ -306,10 +280,12 @@ router.post("/auth/login", async (req, res) => {
       last_login: user.last_login
     };
 
+    // Set HttpOnly cookies
+    res.cookie('accessToken', accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 15 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+
     res.json({
       success: true,
-      accessToken,
-      refreshToken,
       user: userData
     });
 
@@ -325,7 +301,7 @@ router.post("/auth/login", async (req, res) => {
 // ---------------- Refresh Token ----------------
 router.post("/auth/refresh", async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
       return res.status(401).json({ 
@@ -390,9 +366,11 @@ router.post("/auth/refresh", async (req, res) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
+    // Set new access token cookie
+    res.cookie('accessToken', newAccessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'lax' : false, maxAge: 15 * 60 * 1000 });
+
     res.json({ 
-      success: true,
-      accessToken: newAccessToken 
+      success: true
     });
 
   } catch (err) {
@@ -407,16 +385,12 @@ router.post("/auth/refresh", async (req, res) => {
 // ---------------- Logout ----------------
 router.post("/auth/logout", authenticateJWT, async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    // Clear cookies
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
     
-    if (refreshToken) {
-      // Delete specific refresh token
-      const hashedToken = await bcrypt.hash(refreshToken, 10);
-      deleteRefreshToken.run(req.user.id, hashedToken);
-    } else {
-      // Delete all refresh tokens for user
-      deleteAllUserRefreshTokens.run(req.user.id);
-    }
+    // Delete all refresh tokens for user
+    deleteAllUserRefreshTokens.run(req.user.id);
 
     res.json({ 
       success: true, 
@@ -433,7 +407,7 @@ router.post("/auth/logout", authenticateJWT, async (req, res) => {
 });
 
 // ---------------- Get All Users (Admin/Super Admin only) ----------------
-router.get("/users", authenticateJWT, (req, res) => {
+router.get("/auth/users", authenticateJWT, (req, res) => {
   try {
     // Check if user is admin or super_admin
     if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
@@ -460,7 +434,7 @@ router.get("/users", authenticateJWT, (req, res) => {
 });
 
 // ---------------- Get Users by Firm (Manager/Admin) ----------------
-router.get("/users/firm", authenticateJWT, (req, res) => {
+router.get("/auth/users/firm", authenticateJWT, (req, res) => {
   try {
     // Check if user is manager or admin
     if (req.user.role !== 'admin' && req.user.role !== 'manager') {
@@ -487,44 +461,40 @@ router.get("/users/firm", authenticateJWT, (req, res) => {
 });
 
 // ---------------- Get Current User ----------------
-router.get("/auth/me", authenticateJWT, (req, res) => {
+router.get("/me", authenticateJWT, (req, res) => {
+  console.log('me called for user ID:', req.user.id);
   try {
-    const user = getUserById.get(req.user.id);
-    
+    console.log('Before query');
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    console.log('After query, user:', user);
     if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        error: "User not found" 
-      });
+      console.log('User not found');
+      return res.status(404).json({ success: false, error: "User not found" });
     }
-
-    // Remove password from response
-    const userData = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      fullname: user.fullname,
-      role: user.role,
-      firm_id: user.firm_id,
-      firm_name: user.firm_name,
-      firm_code: user.firm_code,
-      firm_status: user.firm_status,
-      created_at: user.created_at,
-      updated_at: user.updated_at
-    };
-
-    res.json({
-      success: true,
-      user: userData
+    console.log('User found, returning');
+    res.json({ 
+      success: true, 
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        fullname: user.fullname,
+        role: user.role,
+        firm_id: user.firm_id,
+        firm_name: null,
+        firm_code: null,
+        last_login: user.last_login
+      }
     });
-
   } catch (err) {
-    console.error("Get current user error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: "Failed to fetch user" 
-    });
+    console.log("Error:", err);
+    res.status(500).json({ success: false, error: "Failed" });
   }
+});
+
+// ---------------- Get Session Info ----------------
+router.get("/auth/session", authenticateJWT, (req, res) => {
+  res.json({ expiresAt: req.user.exp * 1000 });
 });
 
 export default router;

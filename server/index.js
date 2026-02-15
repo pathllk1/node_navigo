@@ -17,6 +17,7 @@ import { fileURLToPath } from "url";
 
 
 import apiRoutes from "./routes/api.js";
+import cookieParser from 'cookie-parser';
 import authRoutes from "./routes/auth.js";
 import adminRoutes from "./routes/admin.js";
 import tstRoutes from "./routes/tst.js";
@@ -38,6 +39,9 @@ const PORT = 3001;
 // Parse JSON bodies
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// Parse cookies
+app.use(cookieParser());
 
 // Serve static files
 app.use(express.static(path.join(__dirname, "../public")));

@@ -67,6 +67,20 @@ function scripts() {
           })
           .catch(err => console.error('Failed to fetch sales bills:', err));
       }
+
+      // Handle EDIT_BILL request from iframe for SPA navigation
+      if (event.data?.action === 'EDIT_BILL') {
+        const billId = event.data.billId;
+        console.log('[EDIT_BILL] Received edit request for bill ID:', billId);
+        console.log('[EDIT_BILL] Navigating to:', '/inventory/sls?edit=' + billId);
+        
+        // Store billId in sessionStorage since SPA routing might not update URL immediately
+        sessionStorage.setItem('editBillId', billId.toString());
+        
+        // Use SPA router to navigate to SLS system in edit mode
+        window.router.navigate('/inventory/sls?edit=' + billId);
+        return;
+      }
     });
 
     iframe.onload = function () {
@@ -98,6 +112,12 @@ function scripts() {
               <div class="flex gap-3 justify-end mt-6 pt-4 border-t-2">
                 <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition font-medium">
                   Close
+                </button>
+                <button id="editBtn" onclick="editBill()" class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition font-medium flex items-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                  </svg>
+                  Edit Bill
                 </button>
                 <button id="printBtn" onclick="printBillPDF()" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition font-medium flex items-center gap-2">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,6 +187,16 @@ function scripts() {
               }
               // Send message to parent page with bill ID
               window.parent.postMessage({ action: 'PRINT_PDF', billId: currentBillId }, '*');
+            };
+
+            // Edit Bill function - sends bill ID to parent for SPA navigation
+            window.editBill = function() {
+              if (!currentBillId) {
+                alert('No bill selected');
+                return;
+              }
+              // Send message to parent page for SPA routing
+              window.parent.postMessage({ action: 'EDIT_BILL', billId: currentBillId }, '*');
             };
             
             document.getElementById('modal').addEventListener('click', function(e) {

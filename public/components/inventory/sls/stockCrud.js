@@ -18,7 +18,7 @@ export function openCreateStockModal(state, onStockSaved) {
             <button id="close-sub-modal" class="hover:text-red-300 text-lg transition-colors">&times;</button>
         </div>
         
-        <form id="create-stock-form" class="p-6 grid grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto max-h-96">
+        <form id="create-stock-form" class="p-6 grid grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto max-h-[70vh] lg:max-h-[80vh]">
             <div class="col-span-2">
                 <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Item Description *</label>
                 <input type="text" name="item" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none" placeholder="e.g. Dell Monitor 24 inch">
@@ -172,7 +172,7 @@ export function openEditStockModal(stock, state, onStockSaved) {
             <button id="close-sub-modal" class="hover:text-red-300 text-lg transition-colors">&times;</button>
         </div>
         
-        <form id="edit-stock-form" class="p-6 grid grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto max-h-96">
+        <form id="edit-stock-form" class="p-6 grid grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto max-h-[70vh] lg:max-h-[80vh]">
             <div class="col-span-2">
                 <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Item Description *</label>
                 <input type="text" name="item" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none" value="${(stock.item || '').replace(/"/g, '&quot;')}">
