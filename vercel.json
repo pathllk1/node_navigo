@@ -5,31 +5,15 @@
     "NODE_ENV": "production"
   },
   "functions": {
-    "server/index.js": {
+    "api/index.js": {
       "memory": 1024,
       "maxDuration": 60
     }
   },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/server/index.js"
-    },
-    {
-      "source": "/auth/(.*)",
-      "destination": "/server/index.js"
-    },
-    {
-      "source": "/admin/(.*)",
-      "destination": "/server/index.js"
-    },
-    {
-      "source": "/tst/(.*)",
-      "destination": "/server/index.js"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/server/index.js"
+      "destination": "/api"
     }
   ],
   "headers": [
